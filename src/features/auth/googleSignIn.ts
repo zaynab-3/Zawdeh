@@ -7,6 +7,14 @@ type GoogleSignInResult = {
   error?: string;
 };
 
+function getOAuthStartErrorMessage(errorMessage?: string) {
+  if (errorMessage?.toLowerCase().includes('unsupported provider')) {
+    return 'Google sign-in is not enabled in Supabase yet.';
+  }
+
+  return 'Could not start Google sign-in.';
+}
+
 function extractOAuthParams(url: string) {
   const [, fragment = ''] = url.split('#');
   const query = url.includes('?') ? url.split('?')[1]?.split('#')[0] ?? '' : '';
@@ -40,7 +48,7 @@ export async function startGoogleSignIn(): Promise<GoogleSignInResult> {
     });
 
     if (error || !data.url) {
-      return { error: 'Could not start Google sign-in.' };
+      return { error: getOAuthStartErrorMessage(error?.message) };
     }
 
     const result = await WebBrowser.openAuthSessionAsync(data.url, authRedirectUrl);

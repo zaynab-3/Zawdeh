@@ -2,21 +2,23 @@ import { Link } from 'expo-router';
 import { Pressable, Text, View } from 'react-native';
 
 import { AppCard } from '@/components/ui/AppCard';
+import { AppButton } from '@/components/ui/AppButton';
+import type { RecipeSummary } from '@/features/recipes/recipeTypes';
 import { getCookabilityLabel } from '@/features/recipes/recipeUtils';
 import { borderRadius, fontSize, spacing, useThemeColors } from '@/lib/theme';
-import type { RecipeSummary } from '@/features/recipes/recipeTypes';
 
 type RecipeCardProps = {
+  onToggleFavorite?: () => void;
   recipe: RecipeSummary;
 };
 
-export function RecipeCard({ recipe }: RecipeCardProps) {
+export function RecipeCard({ onToggleFavorite, recipe }: RecipeCardProps) {
   const colors = useThemeColors();
 
   return (
-    <Link href={{ pathname: '/recipe/[id]', params: { id: recipe.id } }} asChild>
-      <Pressable accessibilityRole="button">
-        <AppCard>
+    <AppCard>
+      <Link href={{ pathname: '/recipe/[id]', params: { id: recipe.id } }} asChild>
+        <Pressable accessibilityRole="button" style={{ gap: spacing.md }}>
           <View style={{ gap: spacing.sm }}>
             <View style={{ alignItems: 'flex-start', flexDirection: 'row', gap: spacing.sm, justifyContent: 'space-between' }}>
               <Text selectable style={{ color: colors.text, flex: 1, fontSize: fontSize.lg, fontWeight: '800' }}>
@@ -54,8 +56,21 @@ export function RecipeCard({ recipe }: RecipeCardProps) {
               </View>
             ))}
           </View>
-        </AppCard>
-      </Pressable>
-    </Link>
+        </Pressable>
+      </Link>
+
+      <View style={{ flexDirection: 'row', gap: spacing.sm }}>
+        <Link href={{ pathname: '/recipe/[id]', params: { id: recipe.id } }} asChild>
+          <AppButton style={{ flex: 1 }} variant="secondary">
+            Open
+          </AppButton>
+        </Link>
+        {onToggleFavorite ? (
+          <AppButton onPress={onToggleFavorite} style={{ flex: 1 }} variant="ghost">
+            {recipe.isFavorite ? 'Unfavorite' : 'Favorite'}
+          </AppButton>
+        ) : null}
+      </View>
+    </AppCard>
   );
 }

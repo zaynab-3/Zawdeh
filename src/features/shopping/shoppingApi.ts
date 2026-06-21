@@ -1,8 +1,6 @@
 import type { ShoppingItem } from '@/features/shopping/shoppingTypes';
+import { loadShoppingItems } from '@/features/shopping/shoppingStore';
 
 export async function listShoppingItems(): Promise<ShoppingItem[]> {
-  return [
-    { id: 'onions', isChecked: false, name: 'Onions', quantity: '3 large' },
-    { id: 'cheese', isChecked: true, name: 'Cheese', quantity: 'optional' },
-  ];
+  return loadShoppingItems();
 }

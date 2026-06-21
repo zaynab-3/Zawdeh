@@ -5,17 +5,15 @@ import { borderRadius, fontSize, spacing, useThemeColors } from '@/lib/theme';
 
 type ShoppingItemRowProps = {
   item: ShoppingItem;
+  onRemove?: () => void;
   onToggle?: () => void;
 };
 
-export function ShoppingItemRow({ item, onToggle }: ShoppingItemRowProps) {
+export function ShoppingItemRow({ item, onRemove, onToggle }: ShoppingItemRowProps) {
   const colors = useThemeColors();
 
   return (
-    <Pressable
-      accessibilityRole="checkbox"
-      accessibilityState={{ checked: item.isChecked }}
-      onPress={onToggle}
+    <View
       style={{
         alignItems: 'center',
         backgroundColor: colors.surface,
@@ -26,7 +24,10 @@ export function ShoppingItemRow({ item, onToggle }: ShoppingItemRowProps) {
         gap: spacing.md,
         padding: spacing.md,
       }}>
-      <View
+      <Pressable
+        accessibilityRole="checkbox"
+        accessibilityState={{ checked: item.isChecked }}
+        onPress={onToggle}
         style={{
           alignItems: 'center',
           backgroundColor: item.isChecked ? colors.primary : 'transparent',
@@ -38,7 +39,7 @@ export function ShoppingItemRow({ item, onToggle }: ShoppingItemRowProps) {
           width: 24,
         }}>
         <Text style={{ color: colors.primaryText, fontSize: fontSize.sm }}>{item.isChecked ? 'x' : ''}</Text>
-      </View>
+      </Pressable>
       <View style={{ flex: 1 }}>
         <Text
           selectable
@@ -52,10 +53,23 @@ export function ShoppingItemRow({ item, onToggle }: ShoppingItemRowProps) {
         </Text>
         {item.quantity ? (
           <Text selectable style={{ color: colors.mutedText, fontSize: fontSize.sm }}>
-            {item.quantity}
+            {[item.quantity, item.unit, item.category].filter(Boolean).join(' / ')}
           </Text>
         ) : null}
       </View>
-    </Pressable>
+      <Pressable
+        accessibilityRole="button"
+        onPress={onRemove}
+        style={({ pressed }) => ({
+          borderColor: colors.border,
+          borderRadius: borderRadius.pill,
+          borderWidth: 1,
+          opacity: pressed ? 0.75 : 1,
+          paddingHorizontal: spacing.md,
+          paddingVertical: spacing.sm,
+        })}>
+        <Text style={{ color: colors.mutedText, fontSize: fontSize.sm, fontWeight: '700' }}>Remove</Text>
+      </Pressable>
+    </View>
   );
 }

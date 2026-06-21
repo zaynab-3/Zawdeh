@@ -1,0 +1,47 @@
+warning: in the working copy of 'app.json', LF will be replaced by CRLF the next time Git touches it
+warning: in the working copy of 'package-lock.json', LF will be replaced by CRLF the next time Git touches it
+warning: in the working copy of 'package.json', LF will be replaced by CRLF the next time Git touches it
+warning: in the working copy of 'src/app/(tabs)/pantry.tsx', LF will be replaced by CRLF the next time Git touches it
+warning: in the working copy of 'src/app/(tabs)/recipes.tsx', LF will be replaced by CRLF the next time Git touches it
+warning: in the working copy of 'src/app/(tabs)/shopping.tsx', LF will be replaced by CRLF the next time Git touches it
+warning: in the working copy of 'src/app/_layout.tsx', LF will be replaced by CRLF the next time Git touches it
+warning: in the working copy of 'src/app/recipe/[id].tsx', LF will be replaced by CRLF the next time Git touches it
+warning: in the working copy of 'src/app/recipe/edit.tsx', LF will be replaced by CRLF the next time Git touches it
+warning: in the working copy of 'src/components/pantry/PantryItemRow.tsx', LF will be replaced by CRLF the next time Git touches it
+warning: in the working copy of 'src/components/recipes/IngredientRow.tsx', LF will be replaced by CRLF the next time Git touches it
+warning: in the working copy of 'src/components/recipes/RecipeCard.tsx', LF will be replaced by CRLF the next time Git touches it
+warning: in the working copy of 'src/components/shopping/ShoppingItemRow.tsx', LF will be replaced by CRLF the next time Git touches it
+warning: in the working copy of 'src/components/ui/AppInput.tsx', LF will be replaced by CRLF the next time Git touches it
+warning: in the working copy of 'src/features/auth/googleSignIn.ts', LF will be replaced by CRLF the next time Git touches it
+warning: in the working copy of 'src/features/pantry/pantryApi.ts', LF will be replaced by CRLF the next time Git touches it
+warning: in the working copy of 'src/features/pantry/pantryTypes.ts', LF will be replaced by CRLF the next time Git touches it
+warning: in the working copy of 'src/features/recipes/recipeApi.ts', LF will be replaced by CRLF the next time Git touches it
+warning: in the working copy of 'src/features/recipes/recipeTypes.ts', LF will be replaced by CRLF the next time Git touches it
+warning: in the working copy of 'src/features/recipes/recipeUtils.ts', LF will be replaced by CRLF the next time Git touches it
+warning: in the working copy of 'src/features/shopping/shoppingApi.ts', LF will be replaced by CRLF the next time Git touches it
+warning: in the working copy of 'src/features/shopping/shoppingTypes.ts', LF will be replaced by CRLF the next time Git touches it
+warning: in the working copy of 'src/lib/supabase.ts', LF will be replaced by CRLF the next time Git touches it
+ app.json                                    |  12 [32m+[m[31m-[m
+ package-lock.json                           | 602 [32m+++++++++++++++++++++++++++[m[31m-[m
+ package.json                                |   3 [32m+[m
+ src/app/(tabs)/pantry.tsx                   | 134 [32m++++++[m[31m-[m
+ src/app/(tabs)/recipes.tsx                  | 103 [32m+++[m[31m--[m
+ src/app/(tabs)/shopping.tsx                 | 125 [32m+++++[m[31m-[m
+ src/app/_layout.tsx                         |   2 [31m-[m
+ src/app/recipe/[id].tsx                     | 132 [32m++++[m[31m--[m
+ src/app/recipe/edit.tsx                     | 211 [32m+++++++++[m[31m-[m
+ src/components/pantry/PantryItemRow.tsx     |  78 [32m+++[m[31m-[m
+ src/components/recipes/IngredientRow.tsx    |  44 [32m+[m[31m-[m
+ src/components/recipes/RecipeCard.tsx       |  31 [32m+[m[31m-[m
+ src/components/shopping/ShoppingItemRow.tsx |  32 [32m+[m[31m-[m
+ src/components/ui/AppInput.tsx              |   7 [32m+[m[31m-[m
+ src/features/auth/googleSignIn.ts           |  10 [32m+[m[31m-[m
+ src/features/pantry/pantryApi.ts            |  15 [32m+[m[31m-[m
+ src/features/pantry/pantryTypes.ts          |  13 [32m+[m
+ src/features/recipes/recipeApi.ts           |  66 [32m+[m[31m--[m
+ src/features/recipes/recipeTypes.ts         |  17 [32m+[m
+ src/features/recipes/recipeUtils.ts         |  28 [32m++[m
+ src/features/shopping/shoppingApi.ts        |   6 [32m+[m[31m-[m
+ src/features/shopping/shoppingTypes.ts      |  13 [32m+[m
+ src/lib/supabase.ts                         |  77 [32m+++[m[31m-[m
+ 23 files changed, 1533 insertions(+), 228 deletions(-)

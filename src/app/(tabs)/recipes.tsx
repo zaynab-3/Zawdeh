@@ -5,38 +5,26 @@ import { Text, View } from 'react-native';
 import { Screen } from '@/components/layout/Screen';
 import { RecipeCard } from '@/components/recipes/RecipeCard';
 import { AppButton } from '@/components/ui/AppButton';
+import { AppCard } from '@/components/ui/AppCard';
 import { AppInput } from '@/components/ui/AppInput';
 import { EmptyState } from '@/components/ui/EmptyState';
 import { LoadingState } from '@/components/ui/LoadingState';
-import { listRecipeSummaries } from '@/features/recipes/recipeApi';
-import type { RecipeSummary } from '@/features/recipes/recipeTypes';
+import { useRecipes } from '@/features/recipes/useRecipes';
 import { spacing, useThemeColors } from '@/lib/theme';
 
 export default function RecipesScreen() {
   const colors = useThemeColors();
-  const [isLoading, setIsLoading] = React.useState(true);
-  const [query, setQuery] = React.useState('');
-  const [recipes, setRecipes] = React.useState<RecipeSummary[]>([]);
-
-  React.useEffect(() => {
-    let isMounted = true;
-
-    listRecipeSummaries(query)
-      .then((nextRecipes) => {
-        if (isMounted) {
-          setRecipes(nextRecipes);
-        }
-      })
-      .finally(() => {
-        if (isMounted) {
-          setIsLoading(false);
-        }
-      });
-
-    return () => {
-      isMounted = false;
-    };
-  }, [query]);
+  const {
+    error,
+    favoriteRecipes,
+    filteredRecipes,
+    isLoading,
+    query,
+    recentRecipes,
+    recipes,
+    setQuery,
+    toggleFavorite,
+  } = useRecipes();
 
   return (
     <Screen
@@ -49,24 +37,67 @@ export default function RecipesScreen() {
       title="Recipes">
       <AppInput label="Search recipes" onChangeText={setQuery} placeholder="Mjadra, pantry, imported" value={query} />
 
-      <Link href="/recipe/edit" asChild>
-        <AppButton>Add recipe</AppButton>
-      </Link>
+      <View style={{ flexDirection: 'row', gap: spacing.sm }}>
+        <Link href="/recipe/edit" asChild>
+          <AppButton style={{ flex: 1 }}>Add recipe</AppButton>
+        </Link>
+        <Link href="/import" asChild>
+          <AppButton style={{ flex: 1 }} variant="secondary">
+            Import
+          </AppButton>
+        </Link>
+      </View>
+
+      <AppCard>
+        <View style={{ flexDirection: 'row', gap: spacing.md, justifyContent: 'space-between' }}>
+          <Text selectable style={{ color: colors.text, fontWeight: '800' }}>
+            {recipes.length} saved
+          </Text>
+          <Text selectable style={{ color: colors.text, fontWeight: '800' }}>
+            {favoriteRecipes.length} favorites
+          </Text>
+          <Text selectable style={{ color: colors.text, fontWeight: '800' }}>
+            {recentRecipes.length} recent
+          </Text>
+        </View>
+      </AppCard>
+
+      {error ? (
+        <Text selectable style={{ color: colors.danger }}>
+          {error}
+        </Text>
+      ) : null}
 
       {isLoading ? <LoadingState label="Loading recipes" /> : null}
 
-      {!isLoading && recipes.length === 0 ? (
+      {!isLoading && filteredRecipes.length === 0 ? (
         <EmptyState
-          message="Save a recipe manually or import one from a caption."
-          title="No recipes yet"
+          message={query ? 'Try another recipe name, tag, cuisine, or ingredient.' : 'Save a recipe manually or import one from a caption.'}
+          title={query ? 'No matching recipes' : 'No recipes yet'}
         />
       ) : null}
 
-      <View style={{ gap: spacing.md }}>
-        {recipes.map((recipe) => (
-          <RecipeCard key={recipe.id} recipe={recipe} />
-        ))}
-      </View>
+      {favoriteRecipes.length > 0 && !query ? (
+        <View style={{ gap: spacing.md }}>
+          <Text selectable style={{ color: colors.text, fontWeight: '800' }}>
+            Favorites
+          </Text>
+          {favoriteRecipes.map((recipe) => (
+            <RecipeCard key={recipe.id} onToggleFavorite={() => toggleFavorite(recipe.id)} recipe={recipe} />
+          ))}
+        </View>
+      ) : null}
+
+      {filteredRecipes.length > 0 ? (
+        <View style={{ gap: spacing.md }}>
+          <Text selectable style={{ color: colors.text, fontWeight: '800' }}>
+            {query ? 'Search results' : 'All saved recipes'}
+          </Text>
+          {filteredRecipes.map((recipe) => (
+            <RecipeCard key={recipe.id} onToggleFavorite={() => toggleFavorite(recipe.id)} recipe={recipe} />
+          ))}
+        </View>
+      ) : null}
 
       <Text selectable style={{ color: colors.mutedText }}>
         Missing an ingredient will never block a recipe. Skip it, substitute it, shop for it, or keep cooking.

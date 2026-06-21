@@ -18,13 +18,20 @@ export type RecipeStep = {
 
 export type RecipeSummary = {
   cookability: CookabilityState;
+  cookTimeMinutes?: number;
   cuisine: string;
+  createdAt?: string;
   description: string;
   id: string;
   isFavorite: boolean;
   mealType: string;
+  prepTimeMinutes?: number;
+  servings?: string;
+  sourcePlatform?: string;
+  sourceUrl?: string;
   tags: string[];
   title: string;
+  updatedAt?: string;
 };
 
 export type RecipeDetail = RecipeSummary & {
@@ -34,9 +41,19 @@ export type RecipeDetail = RecipeSummary & {
 };
 
 export type RecipeDraft = {
+  cookTimeMinutes?: number;
+  cookability?: CookabilityState;
+  cuisine?: string;
   description: string;
+  id?: string;
   ingredients: RecipeIngredient[];
+  isFavorite?: boolean;
+  mealType?: string;
   notes: string;
+  prepTimeMinutes?: number;
+  servings?: string;
+  sourcePlatform?: string;
+  sourceUrl?: string;
   steps: RecipeStep[];
   tags: string[];
   title: string;

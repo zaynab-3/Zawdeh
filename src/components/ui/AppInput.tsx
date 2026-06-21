@@ -1,18 +1,19 @@
-import type { TextInputProps } from 'react-native';
+import type { StyleProp, TextInputProps, ViewStyle } from 'react-native';
 import { Text, TextInput, View } from 'react-native';
 
 import { borderRadius, fontSize, spacing, useThemeColors } from '@/lib/theme';
 
 type AppInputProps = TextInputProps & {
+  containerStyle?: StyleProp<ViewStyle>;
   error?: string;
   label: string;
 };
 
-export function AppInput({ error, label, multiline, style, ...props }: AppInputProps) {
+export function AppInput({ containerStyle, error, label, multiline, style, ...props }: AppInputProps) {
   const colors = useThemeColors();
 
   return (
-    <View style={{ gap: spacing.sm }}>
+    <View style={[{ gap: spacing.sm }, containerStyle]}>
       <Text style={{ color: colors.text, fontSize: fontSize.sm, fontWeight: '700' }}>{label}</Text>
       <TextInput
         multiline={multiline}
