@@ -11,6 +11,7 @@ export function createReviewDraft(input: RecipeImportInput): RecipeImportReview 
   return {
     confidence: 'low',
     description: 'Imported from pasted text. Review before saving.',
+    importMode: 'manual',
     ingredients: [],
     notes: lines.slice(1).join('\n'),
     sourcePlatform: input.sourcePlatform,

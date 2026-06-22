@@ -115,9 +115,11 @@ export default function RecipeDetailScreen() {
       </AppCard>
 
       <View style={{ flexDirection: 'row', flexWrap: 'wrap', gap: spacing.sm }}>
-        <Link href={{ pathname: '/recipe/cook', params: { id: recipe.id } }} asChild>
-          <AppButton>Start cooking</AppButton>
-        </Link>
+        {recipe.steps.length > 0 ? (
+          <Link href={{ pathname: '/recipe/cook', params: { id: recipe.id } }} asChild>
+            <AppButton>Start cooking</AppButton>
+          </Link>
+        ) : null}
         <Link href={{ pathname: '/recipe/edit', params: { id: recipe.id } }} asChild>
           <AppButton variant="secondary">Edit</AppButton>
         </Link>
@@ -155,9 +157,13 @@ export default function RecipeDetailScreen() {
         <Text selectable style={{ color: colors.text, fontSize: fontSize.lg, fontWeight: '800' }}>
           Steps
         </Text>
-        {recipe.steps.map((step) => (
-          <RecipeStepRow key={step.id} step={step} />
-        ))}
+        {recipe.steps.length > 0 ? (
+          recipe.steps.map((step) => <RecipeStepRow key={step.id} step={step} />)
+        ) : (
+          <Text selectable style={{ color: colors.mutedText }}>
+            No steps added yet. Edit this recipe to add instructions.
+          </Text>
+        )}
       </View>
 
       {recipe.notes.length > 0 ? (

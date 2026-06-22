@@ -20,6 +20,7 @@ const SCREENSHOT_PICKER_NOT_READY_MESSAGE =
 export default function ImportScreen() {
   const colors = useThemeColors();
   const router = useRouter();
+  const isMountedRef = React.useRef(true);
   const [error, setError] = React.useState<string | null>(null);
   const [isCleaning, setIsCleaning] = React.useState(false);
   const [rawText, setRawText] = React.useState('');
@@ -28,6 +29,12 @@ export default function ImportScreen() {
   const [sourcePlatform, setSourcePlatform] = React.useState<SourcePlatform>('Instagram');
   const [sourceUrl, setSourceUrl] = React.useState('');
   const sourceUrlError = isHttpUrl(sourceUrl) ? undefined : 'Use a valid http or https link.';
+
+  React.useEffect(() => {
+    return () => {
+      isMountedRef.current = false;
+    };
+  }, []);
 
   function getImportInput() {
     return {
@@ -60,7 +67,9 @@ export default function ImportScreen() {
 
     setError(null);
     await prepareImportReview(getImportInput());
-    router.push('/import/review');
+    if (isMountedRef.current) {
+      router.push('/import/review');
+    }
   }
 
   async function handleCleanWithAi() {
@@ -75,10 +84,14 @@ export default function ImportScreen() {
     } catch {
       await prepareImportReview(getImportInput(), AI_CLEANER_NOT_READY_MESSAGE);
     } finally {
-      setIsCleaning(false);
+      if (isMountedRef.current) {
+        setIsCleaning(false);
+      }
     }
 
-    router.push('/import/review');
+    if (isMountedRef.current) {
+      router.push('/import/review');
+    }
   }
 
   function handlePickScreenshots() {

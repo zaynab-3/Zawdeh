@@ -14,6 +14,7 @@ export type RecipeImportInput = {
 
 export type RecipeImportReview = RecipeDraft & {
   confidence: 'low' | 'medium' | 'high';
+  importMode?: 'ai' | 'manual';
   originalLanguage?: string;
 };
 

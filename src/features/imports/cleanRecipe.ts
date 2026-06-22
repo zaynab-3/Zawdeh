@@ -138,6 +138,7 @@ function outputToReview(input: RecipeImportInput, output: CleanRecipeOutput): Re
     confidence: output.confidence,
     cookTimeMinutes: output.cook_time_minutes,
     description: output.description,
+    importMode: 'ai',
     ingredients: output.ingredients.map((ingredient, index) => ({
       id: `ingredient-${index + 1}`,
       name: ingredient.name,

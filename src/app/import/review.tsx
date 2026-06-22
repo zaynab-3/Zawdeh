@@ -25,23 +25,39 @@ function parseMinutes(value: string) {
 
 function parseIngredients(value: string): RecipeIngredient[] {
   return parseRecipeLines(value).map((line, index) => {
-    const [name, quantity, unit, note] = line.split('|').map((part) => part.trim());
+    if (line.includes('|')) {
+      const [name, quantity, unit, note] = line.split('|').map((part) => part.trim());
+
+      return {
+        id: `ingredient-${index + 1}`,
+        name,
+        note: note || undefined,
+        quantity: quantity || undefined,
+        unit: unit || undefined,
+      };
+    }
+
+    const [namePart, detailPart = ''] = line.split(/\s[—–]\s/u).map((part) => part.trim());
+    const [amountPart = '', ...noteParts] = detailPart.split(',').map((part) => part.trim());
+    const [quantity = '', ...unitParts] = amountPart.split(/\s+/u).filter(Boolean);
 
     return {
       id: `ingredient-${index + 1}`,
-      name,
-      note: note || undefined,
+      name: namePart,
+      note: noteParts.join(', ') || undefined,
       quantity: quantity || undefined,
-      unit: unit || undefined,
+      unit: unitParts.join(' ') || undefined,
     };
   });
 }
 
 function formatIngredients(ingredients: RecipeIngredient[]) {
   return ingredients
-    .map((ingredient) =>
-      [ingredient.name, ingredient.quantity, ingredient.unit, ingredient.note].filter(Boolean).join(' | '),
-    )
+    .map((ingredient) => {
+      const amount = [ingredient.quantity, ingredient.unit].filter(Boolean).join(' ');
+      const detail = [amount, ingredient.note].filter(Boolean).join(', ');
+      return detail ? `${ingredient.name} — ${detail}` : ingredient.name;
+    })
     .join('\n');
 }
 
@@ -57,6 +73,7 @@ export default function ReviewImportScreen() {
   const colors = useThemeColors();
   const router = useRouter();
   const { saveRecipe } = useRecipes();
+  const isMountedRef = React.useRef(true);
   const draft = React.useMemo(() => getPendingImportReview(), []);
   const reviewMessage = React.useMemo(() => getPendingImportReviewMessage(), []);
   const [cookTimeMinutes, setCookTimeMinutes] = React.useState(
@@ -74,6 +91,13 @@ export default function ReviewImportScreen() {
   const [sourceUrl, setSourceUrl] = React.useState(draft?.sourceUrl ?? '');
   const [tags, setTags] = React.useState(draft?.tags.join(', ') ?? '');
   const [title, setTitle] = React.useState(draft?.title ?? '');
+  const isAiReview = draft?.importMode === 'ai';
+
+  React.useEffect(() => {
+    return () => {
+      isMountedRef.current = false;
+    };
+  }, []);
 
   async function handleSave() {
     const parsedIngredients = parseIngredients(ingredients);
@@ -114,9 +138,13 @@ export default function ReviewImportScreen() {
       });
 
       clearPendingImportReview();
-      router.replace({ pathname: '/recipe/[id]', params: { id: savedRecipe.id } });
+      if (isMountedRef.current) {
+        router.replace({ pathname: '/recipe/[id]', params: { id: savedRecipe.id } });
+      }
     } catch (saveError) {
-      setError(saveError instanceof Error ? saveError.message : 'Recipe could not be saved.');
+      if (isMountedRef.current) {
+        setError(saveError instanceof Error ? saveError.message : 'Recipe could not be saved.');
+      }
     }
   }
 
@@ -143,6 +171,11 @@ export default function ReviewImportScreen() {
 
       <AppCard>
         <AppInput label="Title" onChangeText={setTitle} value={title} />
+        {isAiReview ? (
+          <Text selectable style={{ color: colors.mutedText }}>
+            AI suggested this title. You can rename it before saving.
+          </Text>
+        ) : null}
         <View style={{ flexDirection: 'row', gap: spacing.sm }}>
           <AppInput
             containerStyle={{ flex: 1 }}
@@ -169,7 +202,7 @@ export default function ReviewImportScreen() {
           label="Ingredients"
           multiline
           onChangeText={setIngredients}
-          placeholder="Tomatoes | 2 | cups"
+          placeholder="Tomatoes — 2 cups"
           value={ingredients}
         />
         <AppInput

@@ -88,13 +88,8 @@ function EditRecipeForm({ loadError, recipe, saveRecipe }: EditRecipeFormProps) 
       return;
     }
 
-    if (parsedIngredients.length === 0) {
-      setError('Add at least one ingredient.');
-      return;
-    }
-
-    if (parsedSteps.length === 0) {
-      setError('Add at least one step.');
+    if (parsedIngredients.length === 0 && parsedSteps.length === 0) {
+      setError('Add at least one ingredient or one instruction.');
       return;
     }
 
