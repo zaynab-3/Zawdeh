@@ -7,7 +7,11 @@ import { AppButton } from '@/components/ui/AppButton';
 import { AppCard } from '@/components/ui/AppCard';
 import { EmptyState } from '@/components/ui/EmptyState';
 import { AppInput } from '@/components/ui/AppInput';
-import { clearPendingImportReview, getPendingImportReview } from '@/features/imports/importStore';
+import {
+  clearPendingImportReview,
+  getPendingImportReview,
+  getPendingImportReviewMessage,
+} from '@/features/imports/importStore';
 import type { RecipeIngredient, RecipeStep } from '@/features/recipes/recipeTypes';
 import { parseRecipeLines, parseTags } from '@/features/recipes/recipeUtils';
 import { useRecipes } from '@/features/recipes/useRecipes';
@@ -33,6 +37,14 @@ function parseIngredients(value: string): RecipeIngredient[] {
   });
 }
 
+function formatIngredients(ingredients: RecipeIngredient[]) {
+  return ingredients
+    .map((ingredient) =>
+      [ingredient.name, ingredient.quantity, ingredient.unit, ingredient.note].filter(Boolean).join(' | '),
+    )
+    .join('\n');
+}
+
 function parseSteps(value: string): RecipeStep[] {
   return parseRecipeLines(value).map((instruction, index) => ({
     id: `step-${index + 1}`,
@@ -46,12 +58,17 @@ export default function ReviewImportScreen() {
   const router = useRouter();
   const { saveRecipe } = useRecipes();
   const draft = React.useMemo(() => getPendingImportReview(), []);
-  const [cookTimeMinutes, setCookTimeMinutes] = React.useState('');
+  const reviewMessage = React.useMemo(() => getPendingImportReviewMessage(), []);
+  const [cookTimeMinutes, setCookTimeMinutes] = React.useState(
+    draft?.cookTimeMinutes ? String(draft.cookTimeMinutes) : '',
+  );
   const [error, setError] = React.useState<string | null>(null);
-  const [ingredients, setIngredients] = React.useState(draft?.ingredients.map((item) => item.name).join('\n') ?? '');
+  const [ingredients, setIngredients] = React.useState(draft ? formatIngredients(draft.ingredients) : '');
   const [instructions, setInstructions] = React.useState(draft?.steps.map((step) => step.instruction).join('\n') ?? '');
   const [notes, setNotes] = React.useState(draft?.notes ?? '');
-  const [prepTimeMinutes, setPrepTimeMinutes] = React.useState('');
+  const [prepTimeMinutes, setPrepTimeMinutes] = React.useState(
+    draft?.prepTimeMinutes ? String(draft.prepTimeMinutes) : '',
+  );
   const [servings, setServings] = React.useState(draft?.servings ?? '');
   const [sourcePlatform, setSourcePlatform] = React.useState(draft?.sourcePlatform ?? 'Instagram');
   const [sourceUrl, setSourceUrl] = React.useState(draft?.sourceUrl ?? '');
@@ -118,6 +135,11 @@ export default function ReviewImportScreen() {
           {error}
         </Text>
       ) : null}
+      {reviewMessage ? (
+        <Text selectable style={{ color: colors.danger }}>
+          {reviewMessage}
+        </Text>
+      ) : null}
 
       <AppCard>
         <AppInput label="Title" onChangeText={setTitle} value={title} />
@@ -162,6 +184,8 @@ export default function ReviewImportScreen() {
       </AppCard>
 
       <AppCard>
+        <AppInput editable={false} label="Confidence" value={draft.confidence} />
+        <AppInput editable={false} label="Original language" value={draft.originalLanguage ?? 'Unknown'} />
         <AppInput label="Source platform" onChangeText={setSourcePlatform} value={sourcePlatform} />
         <AppInput label="Source URL" onChangeText={setSourceUrl} placeholder="https://..." value={sourceUrl} />
       </AppCard>

@@ -1,4 +1,4 @@
-﻿import "@supabase/functions-js/edge-runtime.d.ts";
+import "@supabase/functions-js/edge-runtime.d.ts";
 import { createClient } from "jsr:@supabase/supabase-js@2";
 
 const headers = {
@@ -215,7 +215,7 @@ async function callGemini(input: {
   targetLanguage: string;
 }) {
   const apiKey = Deno.env.get("GEMINI_API_KEY");
-  const model = Deno.env.get("GEMINI_MODEL") || "gemini-2.5-flash";
+  const model = Deno.env.get("GEMINI_MODEL") || "gemini-3.5-flash";
 
   if (!apiKey) {
     return { response: json({ error: "AI cleaner is not ready yet." }, 503) };
@@ -223,7 +223,7 @@ async function callGemini(input: {
 
   const prompt = [
     "Extract a recipe from the user's pasted text.",
-    "Return only valid JSON. Use this JSON schema as a guide, but output only the JSON object: " + JSON.stringify(recipeSchema),
+    "Return only the requested JSON shape.",
     "Do not invent ingredients or steps that are not implied by the text.",
     "If uncertain, keep confidence low and leave fields empty.",
     `Target language: ${input.targetLanguage}`,
@@ -240,7 +240,12 @@ async function callGemini(input: {
     body: JSON.stringify({
       contents: [{ parts: [{ text: prompt }] }],
       generationConfig: {
-        responseMimeType: "application/json",
+        responseFormat: {
+          text: {
+            mimeType: "application/json",
+            schema: recipeSchema,
+          },
+        },
         temperature: 0.1,
       },
     }),
@@ -252,12 +257,6 @@ async function callGemini(input: {
   });
 
   if (!response.ok) {
-    const errorBody = await response.text();
-    console.error("Gemini request failed", {
-      status: response.status,
-      body: errorBody.slice(0, 1000),
-    });
-
     return { response: json({ error: "AI cleaner is not ready yet." }, 502) };
   }
 
@@ -333,5 +332,3 @@ Deno.serve(async (req) => {
 
   return json(result.recipe);
 });
-
-

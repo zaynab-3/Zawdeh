@@ -223,7 +223,7 @@ async function callGemini(input: {
 
   const prompt = [
     "Extract a recipe from the user's pasted text.",
-    "Return only valid JSON. Use this JSON schema as a guide, but output only the JSON object: " + JSON.stringify(recipeSchema),
+    "Return only the requested JSON shape.",
     "Do not invent ingredients or steps that are not implied by the text.",
     "If uncertain, keep confidence low and leave fields empty.",
     `Target language: ${input.targetLanguage}`,
@@ -241,6 +241,7 @@ async function callGemini(input: {
       contents: [{ parts: [{ text: prompt }] }],
       generationConfig: {
         responseMimeType: "application/json",
+        responseSchema: recipeSchema,
         temperature: 0.1,
       },
     }),
@@ -333,5 +334,4 @@ Deno.serve(async (req) => {
 
   return json(result.recipe);
 });
-
 
