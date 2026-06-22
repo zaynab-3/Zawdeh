@@ -36,7 +36,13 @@
           }
         }
       ],
-      "expo-secure-store"
+      "expo-secure-store",
+      [
+        "expo-image-picker",
+        {
+          "photosPermission": "Allow Zawdeh to select recipe screenshots for this import only."
+        }
+      ]
     ],
     "experiments": {
       "typedRoutes": true,

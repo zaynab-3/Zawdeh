@@ -1,4 +1,5 @@
 import * as React from 'react';
+import * as ImagePicker from 'expo-image-picker';
 import { useRouter } from 'expo-router';
 import { Text, View } from 'react-native';
 
@@ -14,8 +15,8 @@ import { sourcePlatforms } from '@/lib/constants';
 import { fontSize, spacing, useThemeColors } from '@/lib/theme';
 import { isHttpUrl } from '@/lib/validators';
 
-const SCREENSHOT_PICKER_NOT_READY_MESSAGE =
-  'Screenshot picker needs expo-image-picker before selecting images. OCR is coming next. For now, paste the text manually.';
+const MAX_SCREENSHOTS = 5;
+const OCR_NOT_READY_MESSAGE = 'OCR is coming next. For now, paste the text manually.';
 
 export default function ImportScreen() {
   const colors = useThemeColors();
@@ -94,8 +95,50 @@ export default function ImportScreen() {
     }
   }
 
-  function handlePickScreenshots() {
-    setScreenshotMessage(SCREENSHOT_PICKER_NOT_READY_MESSAGE);
+  async function handlePickScreenshots() {
+    const remainingSlots = MAX_SCREENSHOTS - screenshots.length;
+
+    if (remainingSlots <= 0) {
+      setScreenshotMessage('You can select up to 5 screenshots.');
+      return;
+    }
+
+    const permission = await ImagePicker.requestMediaLibraryPermissionsAsync();
+
+    if (!isMountedRef.current) {
+      return;
+    }
+
+    if (!permission.granted) {
+      setScreenshotMessage('Photo library permission is needed to select screenshots.');
+      return;
+    }
+
+    const result = await ImagePicker.launchImageLibraryAsync({
+      allowsMultipleSelection: true,
+      base64: false,
+      mediaTypes: ['images'],
+      orderedSelection: true,
+      quality: 0.85,
+      selectionLimit: remainingSlots,
+    });
+
+    if (!isMountedRef.current || result.canceled) {
+      return;
+    }
+
+    const selectedScreenshots = result.assets.slice(0, remainingSlots).map<SelectedScreenshot>((asset, index) => ({
+      fileName: asset.fileName ?? undefined,
+      height: asset.height,
+      id: `${asset.assetId ?? asset.uri}-${Date.now().toString(36)}-${index}`,
+      mimeType: asset.mimeType ?? undefined,
+      name: asset.fileName ?? `Screenshot ${screenshots.length + index + 1}`,
+      uri: asset.uri,
+      width: asset.width,
+    }));
+
+    setScreenshots((current) => [...current, ...selectedScreenshots].slice(0, MAX_SCREENSHOTS));
+    setScreenshotMessage(OCR_NOT_READY_MESSAGE);
   }
 
   function removeScreenshot(id: string) {

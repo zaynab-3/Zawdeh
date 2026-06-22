@@ -19,7 +19,11 @@ export type RecipeImportReview = RecipeDraft & {
 };
 
 export type SelectedScreenshot = {
+  fileName?: string;
+  height?: number;
   id: string;
+  mimeType?: string;
   name?: string;
   uri: string;
+  width?: number;
 };
