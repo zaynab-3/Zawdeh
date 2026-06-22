@@ -1,13 +1,9 @@
 import * as React from 'react';
 
-import {
-  deleteRecipe,
-  loadRecipes,
-  saveRecipeDraft,
-  subscribeRecipes,
-  toggleRecipeFavorite,
-} from '@/features/recipes/recipeStore';
+import { deleteRecipe, listRecipeDetails, saveRecipe as saveRecipeToApi, toggleFavoriteRecipe } from '@/features/recipes/recipeApi';
+import { subscribeRecipes } from '@/features/recipes/recipeStore';
 import type { RecipeDetail, RecipeDraft } from '@/features/recipes/recipeTypes';
+import { getSafeDataErrorMessage } from '@/lib/supabaseStatus';
 
 function matchesRecipe(recipe: RecipeDetail, query: string) {
   const normalizedQuery = query.trim().toLowerCase();
@@ -40,16 +36,16 @@ export function useRecipes() {
   React.useEffect(() => {
     let isMounted = true;
 
-    loadRecipes()
+    listRecipeDetails()
       .then((nextRecipes) => {
         if (isMounted) {
           setRecipes(nextRecipes);
           setError(null);
         }
       })
-      .catch(() => {
+      .catch((loadError: unknown) => {
         if (isMounted) {
-          setError('Saved recipes could not be loaded on this device.');
+          setError(getSafeDataErrorMessage(loadError, 'Saved recipes could not be loaded.'));
         }
       })
       .finally(() => {
@@ -80,19 +76,20 @@ export function useRecipes() {
   const saveRecipe = React.useCallback(async (draft: RecipeDraft) => {
     try {
       setError(null);
-      return await saveRecipeDraft(draft);
-    } catch {
-      setError('Recipe could not be saved on this device.');
-      throw new Error('Recipe save failed');
+      return await saveRecipeToApi(draft);
+    } catch (saveError) {
+      const message = getSafeDataErrorMessage(saveError, 'Recipe could not be saved.');
+      setError(message);
+      throw new Error(message);
     }
   }, []);
 
   const toggleFavorite = React.useCallback(async (id: string) => {
     try {
       setError(null);
-      return await toggleRecipeFavorite(id);
-    } catch {
-      setError('Favorite status could not be updated.');
+      return await toggleFavoriteRecipe(id);
+    } catch (favoriteError) {
+      setError(getSafeDataErrorMessage(favoriteError, 'Favorite status could not be updated.'));
       return null;
     }
   }, []);
@@ -101,8 +98,8 @@ export function useRecipes() {
     try {
       setError(null);
       await deleteRecipe(id);
-    } catch {
-      setError('Recipe could not be removed.');
+    } catch (removeError) {
+      setError(getSafeDataErrorMessage(removeError, 'Recipe could not be removed.'));
     }
   }, []);
 

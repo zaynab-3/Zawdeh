@@ -7,10 +7,11 @@ import {
   clearCompletedShoppingItems,
   loadShoppingItems,
   removeShoppingItem,
-  subscribeShopping,
   toggleShoppingItem,
-} from '@/features/shopping/shoppingStore';
+} from '@/features/shopping/shoppingApi';
+import { subscribeShopping } from '@/features/shopping/shoppingStore';
 import type { ShoppingDraft, ShoppingItem } from '@/features/shopping/shoppingTypes';
+import { getSafeDataErrorMessage } from '@/lib/supabaseStatus';
 
 function matchesShoppingItem(item: ShoppingItem, query: string) {
   const normalizedQuery = query.trim().toLowerCase();
@@ -42,9 +43,9 @@ export function useShoppingList() {
           setError(null);
         }
       })
-      .catch(() => {
+      .catch((loadError: unknown) => {
         if (isMounted) {
-          setError('Shopping list could not be loaded on this device.');
+          setError(getSafeDataErrorMessage(loadError, 'Shopping list could not be loaded.'));
         }
       })
       .finally(() => {
@@ -73,9 +74,10 @@ export function useShoppingList() {
     try {
       setError(null);
       return await addShoppingItem(draft);
-    } catch {
-      setError('Shopping item could not be added.');
-      throw new Error('Shopping add failed');
+    } catch (addError) {
+      const message = getSafeDataErrorMessage(addError, 'Shopping item could not be added.');
+      setError(message);
+      throw new Error(message);
     }
   }, []);
 
@@ -83,8 +85,8 @@ export function useShoppingList() {
     try {
       setError(null);
       return await addRecipeIngredientsToShopping(recipeId, ingredients);
-    } catch {
-      setError('Recipe ingredients could not be added to shopping.');
+    } catch (ingredientsError) {
+      setError(getSafeDataErrorMessage(ingredientsError, 'Recipe ingredients could not be added to shopping.'));
       return 0;
     }
   }, []);
@@ -93,8 +95,8 @@ export function useShoppingList() {
     try {
       setError(null);
       await toggleShoppingItem(id);
-    } catch {
-      setError('Shopping item could not be updated.');
+    } catch (toggleError) {
+      setError(getSafeDataErrorMessage(toggleError, 'Shopping item could not be updated.'));
     }
   }, []);
 
@@ -102,8 +104,8 @@ export function useShoppingList() {
     try {
       setError(null);
       await removeShoppingItem(id);
-    } catch {
-      setError('Shopping item could not be removed.');
+    } catch (removeError) {
+      setError(getSafeDataErrorMessage(removeError, 'Shopping item could not be removed.'));
     }
   }, []);
 
@@ -111,8 +113,8 @@ export function useShoppingList() {
     try {
       setError(null);
       await clearCompletedShoppingItems();
-    } catch {
-      setError('Completed items could not be cleared.');
+    } catch (clearError) {
+      setError(getSafeDataErrorMessage(clearError, 'Completed items could not be cleared.'));
     }
   }, []);
 

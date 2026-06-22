@@ -161,6 +161,28 @@ export async function toggleShoppingItem(id: string) {
   await persistShoppingItems(nextItems);
 }
 
+export async function updateShoppingItem(id: string, draft: ShoppingDraft) {
+  const items = await loadShoppingItems();
+  const existingItem = items.find((item) => item.id === id);
+
+  if (!existingItem) {
+    throw new Error('Shopping item was not found');
+  }
+
+  const nextItem: ShoppingItem = {
+    ...existingItem,
+    category: draft.category?.trim() || existingItem.category,
+    name: draft.name.trim() || existingItem.name,
+    quantity: draft.quantity?.trim() || existingItem.quantity,
+    recipeId: draft.recipeId ?? existingItem.recipeId,
+    unit: draft.unit?.trim() || existingItem.unit,
+    updatedAt: new Date().toISOString(),
+  };
+
+  await persistShoppingItems(items.map((item) => (item.id === id ? nextItem : item)));
+  return nextItem;
+}
+
 export async function removeShoppingItem(id: string) {
   const items = await loadShoppingItems();
   await persistShoppingItems(items.filter((item) => item.id !== id));
@@ -169,4 +191,11 @@ export async function removeShoppingItem(id: string) {
 export async function clearCompletedShoppingItems() {
   const items = await loadShoppingItems();
   await persistShoppingItems(items.filter((item) => !item.isChecked));
+}
+
+export function replaceShoppingCache(nextItems: ShoppingItem[]) {
+  const items = sortShoppingItems(nextItems);
+  shoppingCache = items;
+  notifyShopping(items);
+  return items;
 }

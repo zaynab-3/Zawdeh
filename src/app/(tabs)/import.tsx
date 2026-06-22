@@ -1,5 +1,5 @@
 import * as React from 'react';
-import { Link } from 'expo-router';
+import { useRouter } from 'expo-router';
 import { Text, View } from 'react-native';
 
 import { Screen } from '@/components/layout/Screen';
@@ -14,35 +14,36 @@ import { isHttpUrl } from '@/lib/validators';
 
 export default function ImportScreen() {
   const colors = useThemeColors();
+  const router = useRouter();
+  const [error, setError] = React.useState<string | null>(null);
   const [rawText, setRawText] = React.useState('');
   const [sourcePlatform, setSourcePlatform] = React.useState<SourcePlatform>('Instagram');
   const [sourceUrl, setSourceUrl] = React.useState('');
   const sourceUrlError = isHttpUrl(sourceUrl) ? undefined : 'Use a valid http or https link.';
 
   async function handlePrepareImport() {
+    if (!rawText.trim()) {
+      setError('Paste caption or recipe text before reviewing.');
+      return;
+    }
+
+    if (sourceUrlError) {
+      setError(sourceUrlError);
+      return;
+    }
+
+    setError(null);
     await prepareImportReview({
       rawText,
       sourcePlatform,
-      sourceType: rawText.trim() ? 'caption' : 'screenshot_placeholder',
+      sourceType: 'caption',
       sourceUrl,
     });
+    router.push('/import/review');
   }
 
   return (
-    <Screen subtitle="Screenshots stay temporary. Review every cleaned recipe before saving." title="Import recipe">
-      <AppCard>
-        <Text selectable style={{ color: colors.text, fontSize: fontSize.md, fontWeight: '800' }}>
-          Add screenshots
-        </Text>
-        <View style={{ flexDirection: 'row', gap: spacing.sm }}>
-          <AppButton variant="secondary">One screenshot</AppButton>
-          <AppButton variant="secondary">Multiple</AppButton>
-        </View>
-        <Text selectable style={{ color: colors.mutedText, fontSize: fontSize.sm }}>
-          TODO: Plug in image picker and on-device OCR. Do not store screenshots permanently.
-        </Text>
-      </AppCard>
-
+    <Screen subtitle="Paste caption text, then review and save manually." title="Import recipe">
       <AppInput
         label="Paste caption or text"
         multiline
@@ -74,11 +75,15 @@ export default function ImportScreen() {
         </View>
       </AppCard>
 
-      <Link href="/import/review" asChild>
-        <AppButton disabled={Boolean(sourceUrlError)} onPress={handlePrepareImport}>
-          Process import
-        </AppButton>
-      </Link>
+      {error ? (
+        <Text selectable style={{ color: colors.danger, fontSize: fontSize.md }}>
+          {error}
+        </Text>
+      ) : null}
+
+      <AppButton disabled={Boolean(sourceUrlError)} onPress={handlePrepareImport}>
+        Continue / Review
+      </AppButton>
     </Screen>
   );
 }

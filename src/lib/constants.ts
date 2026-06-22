@@ -2,7 +2,19 @@ export const appName = 'Zawdeh';
 
 export const mealSlots = ['Breakfast', 'Lunch', 'Dinner', 'Snack', 'Dessert'] as const;
 
-export const sourcePlatforms = ['Instagram', 'TikTok', 'YouTube', 'Facebook', 'Website', 'Other'] as const;
+export const sourcePlatforms = [
+  'Instagram',
+  'TikTok',
+  'Pinterest',
+  'Facebook',
+  'YouTube',
+  'X / Twitter',
+  'Threads',
+  'WhatsApp',
+  'Telegram',
+  'Website',
+  'Other',
+] as const;
 
 export const substitutionRules = {
   butter: {

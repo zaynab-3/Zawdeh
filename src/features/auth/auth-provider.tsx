@@ -3,6 +3,7 @@ import * as WebBrowser from 'expo-web-browser';
 import type { Session, User } from '@supabase/supabase-js';
 
 import { startGoogleSignIn } from '@/features/auth/googleSignIn';
+import { ensureProfile, getProfileSetupErrorMessage } from '@/features/auth/profileApi';
 import { isSupabaseConfigured } from '@/lib/env';
 import { getSupabase } from '@/lib/supabase';
 
@@ -22,6 +23,7 @@ export const AuthContext = React.createContext<AuthContextValue | null>(null);
 
 export function AuthProvider({ children }: React.PropsWithChildren) {
   const [authError, setAuthError] = React.useState<string | null>(null);
+  const [profileError, setProfileError] = React.useState<string | null>(null);
   const [session, setSession] = React.useState<Session | null>(null);
   const configured = isSupabaseConfigured();
   const [isLoading, setIsLoading] = React.useState(configured);
@@ -42,18 +44,49 @@ export function AuthProvider({ children }: React.PropsWithChildren) {
         }
 
         setSession(data.session);
+        if (!data.session) {
+          setProfileError(null);
+        }
       })
       .finally(() => setIsLoading(false));
 
     const { data } = supabase.auth.onAuthStateChange((_event, nextSession) => {
       setSession(nextSession);
+      if (!nextSession) {
+        setProfileError(null);
+      }
     });
 
     return () => data.subscription.unsubscribe();
   }, [configured]);
 
+  React.useEffect(() => {
+    if (!configured || !session?.user) {
+      return undefined;
+    }
+
+    let isMounted = true;
+
+    ensureProfile(session.user)
+      .then(() => {
+        if (isMounted) {
+          setProfileError(null);
+        }
+      })
+      .catch((error: unknown) => {
+        if (isMounted) {
+          setProfileError(getProfileSetupErrorMessage(error));
+        }
+      });
+
+    return () => {
+      isMounted = false;
+    };
+  }, [configured, session?.user]);
+
   const signInWithGoogle = React.useCallback(async () => {
     setAuthError(null);
+    setProfileError(null);
     const result = await startGoogleSignIn();
 
     if (result.error) {
@@ -63,6 +96,7 @@ export function AuthProvider({ children }: React.PropsWithChildren) {
 
   const signOut = React.useCallback(async () => {
     setAuthError(null);
+    setProfileError(null);
 
     if (!configured) {
       setSession(null);
@@ -77,7 +111,7 @@ export function AuthProvider({ children }: React.PropsWithChildren) {
 
   const value = React.useMemo<AuthContextValue>(
     () => ({
-      authError,
+      authError: authError ?? profileError,
       isConfigured: configured,
       isLoading,
       session,
@@ -85,7 +119,7 @@ export function AuthProvider({ children }: React.PropsWithChildren) {
       signOut,
       user: session?.user ?? null,
     }),
-    [authError, configured, isLoading, session, signInWithGoogle, signOut],
+    [authError, configured, isLoading, profileError, session, signInWithGoogle, signOut],
   );
 
   return <AuthContext value={value}>{children}</AuthContext>;

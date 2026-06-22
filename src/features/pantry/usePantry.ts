@@ -3,14 +3,15 @@ import * as React from 'react';
 import {
   addFavoriteIngredient,
   addPantryItem,
-  loadPantry,
+  loadPantryState,
   quickAddFavoriteIngredientToPantry,
   removePantryItem,
-  subscribePantry,
   togglePantryItemAvailable,
   togglePantryItemFavorite,
-} from '@/features/pantry/pantryStore';
+} from '@/features/pantry/pantryApi';
+import { subscribePantry } from '@/features/pantry/pantryStore';
 import type { FavoriteIngredient, PantryDraft, PantryItem } from '@/features/pantry/pantryTypes';
+import { getSafeDataErrorMessage } from '@/lib/supabaseStatus';
 
 function matchesPantryItem(item: PantryItem, query: string) {
   const normalizedQuery = query.trim().toLowerCase();
@@ -36,7 +37,7 @@ export function usePantry() {
   React.useEffect(() => {
     let isMounted = true;
 
-    loadPantry()
+    loadPantryState()
       .then((state) => {
         if (isMounted) {
           setFavorites(state.favorites);
@@ -44,9 +45,9 @@ export function usePantry() {
           setError(null);
         }
       })
-      .catch(() => {
+      .catch((loadError: unknown) => {
         if (isMounted) {
-          setError('Pantry could not be loaded on this device.');
+          setError(getSafeDataErrorMessage(loadError, 'Pantry could not be loaded.'));
         }
       })
       .finally(() => {
@@ -76,9 +77,10 @@ export function usePantry() {
     try {
       setError(null);
       return await addPantryItem(draft);
-    } catch {
-      setError('Ingredient could not be added.');
-      throw new Error('Pantry add failed');
+    } catch (addError) {
+      const message = getSafeDataErrorMessage(addError, 'Ingredient could not be added.');
+      setError(message);
+      throw new Error(message);
     }
   }, []);
 
@@ -86,9 +88,10 @@ export function usePantry() {
     try {
       setError(null);
       return await addFavoriteIngredient(ingredient);
-    } catch {
-      setError('Favorite ingredient could not be saved.');
-      throw new Error('Favorite ingredient save failed');
+    } catch (favoriteError) {
+      const message = getSafeDataErrorMessage(favoriteError, 'Favorite ingredient could not be saved.');
+      setError(message);
+      throw new Error(message);
     }
   }, []);
 
@@ -96,9 +99,10 @@ export function usePantry() {
     try {
       setError(null);
       return await quickAddFavoriteIngredientToPantry(ingredient);
-    } catch {
-      setError('Favorite ingredient could not be added to pantry.');
-      throw new Error('Favorite pantry add failed');
+    } catch (quickAddError) {
+      const message = getSafeDataErrorMessage(quickAddError, 'Favorite ingredient could not be added to pantry.');
+      setError(message);
+      throw new Error(message);
     }
   }, []);
 
@@ -106,8 +110,8 @@ export function usePantry() {
     try {
       setError(null);
       await togglePantryItemAvailable(id);
-    } catch {
-      setError('Pantry item could not be updated.');
+    } catch (toggleError) {
+      setError(getSafeDataErrorMessage(toggleError, 'Pantry item could not be updated.'));
     }
   }, []);
 
@@ -115,8 +119,8 @@ export function usePantry() {
     try {
       setError(null);
       await togglePantryItemFavorite(id);
-    } catch {
-      setError('Favorite status could not be updated.');
+    } catch (favoriteError) {
+      setError(getSafeDataErrorMessage(favoriteError, 'Favorite status could not be updated.'));
     }
   }, []);
 
@@ -124,8 +128,8 @@ export function usePantry() {
     try {
       setError(null);
       await removePantryItem(id);
-    } catch {
-      setError('Pantry item could not be removed.');
+    } catch (removeError) {
+      setError(getSafeDataErrorMessage(removeError, 'Pantry item could not be removed.'));
     }
   }, []);
 

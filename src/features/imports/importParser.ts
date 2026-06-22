@@ -2,14 +2,20 @@ import type { RecipeImportInput, RecipeImportReview } from '@/features/imports/i
 import { trimToMax } from '@/lib/validators';
 
 export function createReviewDraft(input: RecipeImportInput): RecipeImportReview {
-  const title = trimToMax(input.rawText.split('\n')[0] || 'Imported recipe', 80);
+  const lines = input.rawText
+    .split('\n')
+    .map((line) => line.trim())
+    .filter(Boolean);
+  const title = trimToMax(lines[0] || 'Imported recipe', 80);
 
   return {
-    confidence: input.rawText.trim() ? 'medium' : 'low',
-    description: 'Review before saving.',
-    ingredients: [{ id: 'ingredient-1', name: 'Ingredient from import', quantity: '1' }],
-    notes: input.sourceUrl ? `Source: ${input.sourceUrl}` : '',
-    steps: [{ id: 'step-1', instruction: 'Cleaned instruction placeholder.', position: 1 }],
+    confidence: 'low',
+    description: 'Imported from pasted text. Review before saving.',
+    ingredients: [],
+    notes: lines.slice(1).join('\n'),
+    sourcePlatform: input.sourcePlatform,
+    sourceUrl: input.sourceUrl?.trim() || undefined,
+    steps: [],
     tags: [input.sourcePlatform.toLowerCase()],
     title,
   };

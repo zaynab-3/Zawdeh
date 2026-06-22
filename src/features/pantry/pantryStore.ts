@@ -201,6 +201,32 @@ export async function togglePantryItemAvailable(id: string) {
   await persistPantry({ ...state, items: nextItems });
 }
 
+export async function updatePantryItem(id: string, draft: PantryDraft) {
+  const state = await loadPantry();
+  const existingItem = state.items.find((item) => item.id === id);
+
+  if (!existingItem) {
+    throw new Error('Pantry item was not found');
+  }
+
+  const nextItem: PantryItem = {
+    ...existingItem,
+    category: draft.category?.trim() || existingItem.category,
+    isFavorite: draft.isFavorite ?? existingItem.isFavorite,
+    name: draft.name.trim() || existingItem.name,
+    quantity: draft.quantity?.trim() || existingItem.quantity,
+    unit: draft.unit?.trim() || existingItem.unit,
+    updatedAt: new Date().toISOString(),
+  };
+
+  await persistPantry({
+    ...state,
+    items: state.items.map((item) => (item.id === id ? nextItem : item)),
+  });
+
+  return nextItem;
+}
+
 export async function togglePantryItemFavorite(id: string) {
   const state = await loadPantry();
   let nextFavorites = state.favorites;
@@ -222,4 +248,15 @@ export async function togglePantryItemFavorite(id: string) {
 export async function removePantryItem(id: string) {
   const state = await loadPantry();
   await persistPantry({ ...state, items: state.items.filter((item) => item.id !== id) });
+}
+
+export function replacePantryCache(nextState: PantryState) {
+  const state = {
+    favorites: uniqueFavorites(nextState.favorites),
+    items: sortPantryItems(nextState.items),
+  };
+
+  pantryCache = state;
+  notifyPantry(state);
+  return state;
 }

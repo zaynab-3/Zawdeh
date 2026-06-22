@@ -21,7 +21,23 @@ export default function CookModeScreen() {
   const [session, setSession] = React.useState(() => createCookModeSession(id));
 
   React.useEffect(() => {
-    getRecipeDetail(id).then(setRecipe);
+    let isMounted = true;
+
+    getRecipeDetail(id)
+      .then((nextRecipe) => {
+        if (isMounted) {
+          setRecipe(nextRecipe);
+        }
+      })
+      .catch(() => {
+        if (isMounted) {
+          setRecipe(null);
+        }
+      });
+
+    return () => {
+      isMounted = false;
+    };
   }, [id]);
 
   const currentStep = recipe?.steps[session.currentStep - 1];

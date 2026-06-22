@@ -117,7 +117,7 @@ function normalizeStep(step: RecipeStep, index: number): RecipeStep {
   };
 }
 
-function recipeFromDraft(draft: RecipeDraft, current?: RecipeDetail): RecipeDetail {
+export function buildRecipeFromDraft(draft: RecipeDraft, current?: RecipeDetail): RecipeDetail {
   const now = new Date().toISOString();
   const ingredients = draft.ingredients
     .map(normalizeIngredient)
@@ -227,7 +227,7 @@ export async function getRecipeDetailFromStore(id: string) {
 export async function saveRecipeDraft(draft: RecipeDraft) {
   const recipes = await loadRecipes();
   const existingRecipe = draft.id ? recipes.find((recipe) => recipe.id === draft.id) : undefined;
-  const savedRecipe = recipeFromDraft(draft, existingRecipe);
+  const savedRecipe = buildRecipeFromDraft(draft, existingRecipe);
   const nextRecipes = existingRecipe
     ? recipes.map((recipe) => (recipe.id === savedRecipe.id ? savedRecipe : recipe))
     : [savedRecipe, ...recipes];
@@ -259,4 +259,25 @@ export async function toggleRecipeFavorite(id: string) {
 export async function deleteRecipe(id: string) {
   const recipes = await loadRecipes();
   await persistRecipes(recipes.filter((recipe) => recipe.id !== id));
+}
+
+export function replaceRecipeCache(nextRecipes: RecipeDetail[]) {
+  const sortedRecipes = sortRecipes(nextRecipes);
+  recipeCache = sortedRecipes;
+  notifyRecipes(sortedRecipes);
+  return sortedRecipes;
+}
+
+export async function upsertRecipeCache(recipeToSave: RecipeDetail) {
+  const recipes = recipeCache ?? (await loadRecipes());
+  const nextRecipes = recipes.some((recipe) => recipe.id === recipeToSave.id)
+    ? recipes.map((recipe) => (recipe.id === recipeToSave.id ? recipeToSave : recipe))
+    : [recipeToSave, ...recipes];
+
+  return replaceRecipeCache(nextRecipes);
+}
+
+export async function removeRecipeFromCache(id: string) {
+  const recipes = recipeCache ?? (await loadRecipes());
+  return replaceRecipeCache(recipes.filter((recipe) => recipe.id !== id));
 }

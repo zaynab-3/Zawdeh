@@ -6,7 +6,7 @@ export type SourcePlatform = (typeof sourcePlatforms)[number];
 export type RecipeImportInput = {
   rawText: string;
   sourcePlatform: SourcePlatform;
-  sourceType: 'caption' | 'manual_notes' | 'screenshot_placeholder';
+  sourceType: 'caption' | 'manual_notes';
   sourceUrl?: string;
 };
 
