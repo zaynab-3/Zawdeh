@@ -11,6 +11,8 @@ type IngredientRowProps = {
 
 export function IngredientRow({ ingredient, isChecked, onToggle }: IngredientRowProps) {
   const colors = useThemeColors();
+  const amount = [ingredient.quantity, ingredient.unit].filter(Boolean).join(' ');
+  const detail = [amount, ingredient.note].filter(Boolean).join(', ') || 'As needed';
 
   return (
     <Pressable
@@ -42,7 +44,7 @@ export function IngredientRow({ ingredient, isChecked, onToggle }: IngredientRow
           {ingredient.name}
         </Text>
         <Text selectable style={{ color: colors.mutedText, fontSize: fontSize.sm }}>
-          {[ingredient.quantity, ingredient.unit, ingredient.note].filter(Boolean).join(' ') || 'As needed'}
+          {detail}
         </Text>
       </View>
       {onToggle ? (

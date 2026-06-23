@@ -6,6 +6,7 @@ export type RecipeIngredient = {
   name: string;
   note?: string;
   quantity?: string;
+  section?: string;
   unit?: string;
 };
 
@@ -13,6 +14,7 @@ export type RecipeStep = {
   id: string;
   instruction: string;
   position: number;
+  section?: string;
   timerMinutes?: number;
 };
 

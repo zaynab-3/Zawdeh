@@ -104,6 +104,7 @@ function normalizeIngredient(ingredient: RecipeIngredient, index: number): Recip
     name: ingredient.name.trim(),
     note: ingredient.note?.trim() || undefined,
     quantity: ingredient.quantity?.trim() || undefined,
+    section: ingredient.section?.trim() || undefined,
     unit: ingredient.unit?.trim() || undefined,
   };
 }
@@ -114,6 +115,7 @@ function normalizeStep(step: RecipeStep, index: number): RecipeStep {
     id: step.id || generateId(`step-${index + 1}`),
     instruction: step.instruction.trim(),
     position: index + 1,
+    section: step.section?.trim() || undefined,
   };
 }
 

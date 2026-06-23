@@ -12,39 +12,110 @@ import { useRecipe } from '@/features/recipes/useRecipes';
 import { spacing, useThemeColors } from '@/lib/theme';
 import { hasText, isHttpUrl } from '@/lib/validators';
 
+function getKnownSections(items: { section?: string }[]) {
+  return new Set(
+    items.map((item) => item.section?.trim().toLowerCase()).filter((item): item is string => Boolean(item)),
+  );
+}
+
+function normalizeSectionTitle(value: string) {
+  return value.trim().replace(/:$/u, '');
+}
+
+function isSectionHeading(line: string, knownSections: Set<string>) {
+  const normalized = normalizeSectionTitle(line).toLowerCase();
+  return Boolean(normalized && !line.includes('|') && (line.trim().endsWith(':') || knownSections.has(normalized)));
+}
+
 function parseMinutes(value: string) {
   const parsed = Number.parseInt(value.trim(), 10);
   return Number.isFinite(parsed) && parsed > 0 ? parsed : undefined;
 }
 
 function formatIngredients(ingredients: RecipeIngredient[]) {
-  return ingredients
-    .map((ingredient) =>
-      [ingredient.name, ingredient.quantity, ingredient.unit, ingredient.note].filter(Boolean).join(' | '),
-    )
-    .join('\n');
+  const hasSections = ingredients.some((ingredient) => ingredient.section);
+  const lines: string[] = [];
+  let currentSection: string | undefined;
+
+  ingredients.forEach((ingredient) => {
+    if (hasSections && ingredient.section !== currentSection) {
+      if (lines.length > 0) {
+        lines.push('');
+      }
+
+      currentSection = ingredient.section;
+      lines.push(currentSection || 'Main');
+    }
+
+    lines.push([ingredient.name, ingredient.quantity, ingredient.unit, ingredient.note].filter(Boolean).join(' | '));
+  });
+
+  return lines.join('\n');
 }
 
-function parseIngredients(value: string): RecipeIngredient[] {
-  return parseRecipeLines(value).map((line, index) => {
+function parseIngredients(value: string, knownSections: Set<string>): RecipeIngredient[] {
+  let currentSection: string | undefined;
+
+  return parseRecipeLines(value).flatMap((line, index) => {
+    if (isSectionHeading(line, knownSections)) {
+      currentSection = normalizeSectionTitle(line);
+      return [];
+    }
+
     const [name, quantity, unit, note] = line.split('|').map((part) => part.trim());
 
-    return {
-      id: `ingredient-${index + 1}`,
-      name,
-      note: note || undefined,
-      quantity: quantity || undefined,
-      unit: unit || undefined,
-    };
+    return [
+      {
+        id: `ingredient-${index + 1}`,
+        name,
+        note: note || undefined,
+        quantity: quantity || undefined,
+        section: currentSection,
+        unit: unit || undefined,
+      },
+    ];
   });
 }
 
-function parseSteps(value: string): RecipeStep[] {
-  return parseRecipeLines(value).map((instruction, index) => ({
-    id: `step-${index + 1}`,
-    instruction,
-    position: index + 1,
-  }));
+function formatSteps(steps: RecipeStep[]) {
+  const hasSections = steps.some((step) => step.section);
+  const lines: string[] = [];
+  let currentSection: string | undefined;
+
+  steps.forEach((step) => {
+    if (hasSections && step.section !== currentSection) {
+      if (lines.length > 0) {
+        lines.push('');
+      }
+
+      currentSection = step.section;
+      lines.push(currentSection || 'Main');
+    }
+
+    lines.push(step.instruction);
+  });
+
+  return lines.join('\n');
+}
+
+function parseSteps(value: string, knownSections: Set<string>): RecipeStep[] {
+  let currentSection: string | undefined;
+
+  return parseRecipeLines(value).flatMap((instruction, index) => {
+    if (isSectionHeading(instruction, knownSections)) {
+      currentSection = normalizeSectionTitle(instruction);
+      return [];
+    }
+
+    return [
+      {
+        id: `step-${index + 1}`,
+        instruction,
+        position: index + 1,
+        section: currentSection,
+      },
+    ];
+  });
 }
 
 type SaveRecipe = (draft: RecipeDraft) => Promise<RecipeDetail>;
@@ -65,9 +136,7 @@ function EditRecipeForm({ loadError, recipe, saveRecipe }: EditRecipeFormProps) 
   const [description, setDescription] = React.useState(recipe?.description ?? '');
   const [error, setError] = React.useState<string | null>(null);
   const [ingredients, setIngredients] = React.useState(recipe ? formatIngredients(recipe.ingredients) : '');
-  const [instructions, setInstructions] = React.useState(
-    recipe ? recipe.steps.map((step) => step.instruction).join('\n') : '',
-  );
+  const [instructions, setInstructions] = React.useState(recipe ? formatSteps(recipe.steps) : '');
   const [mealType, setMealType] = React.useState(recipe?.mealType ?? 'Anytime');
   const [notes, setNotes] = React.useState(recipe ? recipe.notes.join('\n') : '');
   const [prepTimeMinutes, setPrepTimeMinutes] = React.useState(
@@ -78,10 +147,12 @@ function EditRecipeForm({ loadError, recipe, saveRecipe }: EditRecipeFormProps) 
   const [sourceUrl, setSourceUrl] = React.useState(recipe?.sourceUrl ?? '');
   const [tags, setTags] = React.useState(recipe ? recipe.tags.join(', ') : '');
   const [title, setTitle] = React.useState(recipe?.title ?? '');
+  const knownIngredientSections = React.useMemo(() => getKnownSections(recipe?.ingredients ?? []), [recipe]);
+  const knownStepSections = React.useMemo(() => getKnownSections(recipe?.steps ?? []), [recipe]);
 
   async function handleSave() {
-    const parsedIngredients = parseIngredients(ingredients);
-    const parsedSteps = parseSteps(instructions);
+    const parsedIngredients = parseIngredients(ingredients, knownIngredientSections);
+    const parsedSteps = parseSteps(instructions, knownStepSections);
 
     if (!hasText(title)) {
       setError('Recipe title is required.');

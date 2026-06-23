@@ -7,8 +7,16 @@ import { Screen } from '@/components/layout/Screen';
 import { AppButton } from '@/components/ui/AppButton';
 import { AppCard } from '@/components/ui/AppCard';
 import { AppInput } from '@/components/ui/AppInput';
-import { AI_CLEANER_NOT_READY_MESSAGE } from '@/features/imports/cleanRecipe';
-import { prepareAiImportReview, prepareImportReview } from '@/features/imports/importApi';
+import {
+  AI_CLEANER_NOT_READY_MESSAGE,
+  SCREENSHOT_AI_NOT_READY_MESSAGE,
+  type CleanRecipeImagePayload,
+} from '@/features/imports/cleanRecipe';
+import {
+  prepareAiImportReview,
+  prepareAiScreenshotImportReview,
+  prepareImportReview,
+} from '@/features/imports/importApi';
 import { ScreenshotImportSection } from '@/features/imports/ScreenshotImportSection';
 import type { SelectedScreenshot, SourcePlatform } from '@/features/imports/importTypes';
 import { sourcePlatforms } from '@/lib/constants';
@@ -16,7 +24,74 @@ import { fontSize, spacing, useThemeColors } from '@/lib/theme';
 import { isHttpUrl } from '@/lib/validators';
 
 const MAX_SCREENSHOTS = 5;
-const OCR_NOT_READY_MESSAGE = 'OCR is coming next. For now, paste the text manually.';
+const MAX_IMAGE_BASE64_CHARS = 8_000_000;
+const MAX_TOTAL_IMAGE_BASE64_CHARS = 16_000_000;
+const SCREENSHOT_PREPARE_FAILED_MESSAGE = 'Could not prepare screenshots. Please try selecting them again.';
+const SCREENSHOT_TOO_LARGE_MESSAGE = 'Screenshots are too large. Select fewer or smaller screenshots.';
+
+function getScreenshotMimeType(uri: string, mimeType?: string | null) {
+  const normalizedMimeType = mimeType?.trim().toLowerCase();
+
+  if (normalizedMimeType?.startsWith('image/')) {
+    return normalizedMimeType;
+  }
+
+  const normalizedUri = uri.split('?')[0]?.toLowerCase() ?? '';
+
+  if (normalizedUri.endsWith('.png')) {
+    return 'image/png';
+  }
+
+  if (normalizedUri.endsWith('.webp')) {
+    return 'image/webp';
+  }
+
+  if (normalizedUri.endsWith('.heic')) {
+    return 'image/heic';
+  }
+
+  if (normalizedUri.endsWith('.heif')) {
+    return 'image/heif';
+  }
+
+  return 'image/jpeg';
+}
+
+function getTotalImageBase64Length(screenshots: SelectedScreenshot[]) {
+  return screenshots.reduce((total, screenshot) => total + (screenshot.base64?.length ?? 0), 0);
+}
+
+function screenshotsAreTooLarge(screenshots: SelectedScreenshot[]) {
+  return (
+    screenshots.some((screenshot) => (screenshot.base64?.length ?? 0) > MAX_IMAGE_BASE64_CHARS) ||
+    getTotalImageBase64Length(screenshots) > MAX_TOTAL_IMAGE_BASE64_CHARS
+  );
+}
+
+function getScreenshotImagePayloads(screenshots: SelectedScreenshot[]): CleanRecipeImagePayload[] | null {
+  if (screenshots.length === 0 || screenshots.length > MAX_SCREENSHOTS || screenshotsAreTooLarge(screenshots)) {
+    return null;
+  }
+
+  const images = screenshots.map((screenshot) => {
+    const base64 = screenshot.base64?.trim();
+
+    if (!base64) {
+      return null;
+    }
+
+    return {
+      base64,
+      mime_type: screenshot.mimeType ?? getScreenshotMimeType(screenshot.uri),
+    };
+  });
+
+  if (images.some((image) => image === null)) {
+    return null;
+  }
+
+  return images as CleanRecipeImagePayload[];
+}
 
 export default function ImportScreen() {
   const colors = useThemeColors();
@@ -24,6 +99,7 @@ export default function ImportScreen() {
   const isMountedRef = React.useRef(true);
   const [error, setError] = React.useState<string | null>(null);
   const [isCleaning, setIsCleaning] = React.useState(false);
+  const [isCleaningScreenshots, setIsCleaningScreenshots] = React.useState(false);
   const [rawText, setRawText] = React.useState('');
   const [screenshotMessage, setScreenshotMessage] = React.useState<string | null>(null);
   const [screenshots, setScreenshots] = React.useState<SelectedScreenshot[]>([]);
@@ -81,17 +157,21 @@ export default function ImportScreen() {
     try {
       setError(null);
       setIsCleaning(true);
-      await prepareAiImportReview(getImportInput());
+      const reviews = await prepareAiImportReview(getImportInput());
+
+      if (isMountedRef.current) {
+        router.push(reviews.length > 1 ? '/import/results' : '/import/review');
+      }
     } catch {
       await prepareImportReview(getImportInput(), AI_CLEANER_NOT_READY_MESSAGE);
+
+      if (isMountedRef.current) {
+        router.push('/import/review');
+      }
     } finally {
       if (isMountedRef.current) {
         setIsCleaning(false);
       }
-    }
-
-    if (isMountedRef.current) {
-      router.push('/import/review');
     }
   }
 
@@ -116,7 +196,7 @@ export default function ImportScreen() {
 
     const result = await ImagePicker.launchImageLibraryAsync({
       allowsMultipleSelection: true,
-      base64: false,
+      base64: true,
       mediaTypes: ['images'],
       orderedSelection: true,
       quality: 0.85,
@@ -128,17 +208,66 @@ export default function ImportScreen() {
     }
 
     const selectedScreenshots = result.assets.slice(0, remainingSlots).map<SelectedScreenshot>((asset, index) => ({
+      base64: asset.base64 ?? undefined,
       fileName: asset.fileName ?? undefined,
       height: asset.height,
       id: `${asset.assetId ?? asset.uri}-${Date.now().toString(36)}-${index}`,
-      mimeType: asset.mimeType ?? undefined,
+      mimeType: getScreenshotMimeType(asset.uri, asset.mimeType),
       name: asset.fileName ?? `Screenshot ${screenshots.length + index + 1}`,
       uri: asset.uri,
       width: asset.width,
     }));
 
-    setScreenshots((current) => [...current, ...selectedScreenshots].slice(0, MAX_SCREENSHOTS));
-    setScreenshotMessage(OCR_NOT_READY_MESSAGE);
+    if (selectedScreenshots.some((screenshot) => !screenshot.base64)) {
+      setScreenshotMessage(SCREENSHOT_PREPARE_FAILED_MESSAGE);
+      return;
+    }
+
+    const nextScreenshots = [...screenshots, ...selectedScreenshots].slice(0, MAX_SCREENSHOTS);
+
+    if (screenshotsAreTooLarge(nextScreenshots)) {
+      setScreenshotMessage(SCREENSHOT_TOO_LARGE_MESSAGE);
+      return;
+    }
+
+    setScreenshots(nextScreenshots);
+    setScreenshotMessage(null);
+  }
+
+  async function handleCleanScreenshotsWithAi() {
+    if (sourceUrlError) {
+      setError(sourceUrlError);
+      return;
+    }
+
+    const images = getScreenshotImagePayloads(screenshots);
+
+    if (!images) {
+      setScreenshotMessage(
+        screenshotsAreTooLarge(screenshots) ? SCREENSHOT_TOO_LARGE_MESSAGE : SCREENSHOT_PREPARE_FAILED_MESSAGE,
+      );
+      return;
+    }
+
+    try {
+      setError(null);
+      setScreenshotMessage(null);
+      setIsCleaningScreenshots(true);
+      const reviews = await prepareAiScreenshotImportReview(getImportInput(), images);
+
+      if (isMountedRef.current) {
+        setScreenshots([]);
+        router.push(reviews.length > 1 ? '/import/results' : '/import/review');
+      }
+    } catch {
+      if (isMountedRef.current) {
+        setScreenshotMessage(SCREENSHOT_AI_NOT_READY_MESSAGE);
+      }
+    } finally {
+      if (isMountedRef.current) {
+        setIsCleaningScreenshots(false);
+      }
+    }
   }
 
   function removeScreenshot(id: string) {
@@ -164,7 +293,10 @@ export default function ImportScreen() {
   return (
     <Screen subtitle="Paste caption text, then review and save manually." title="Import recipe">
       <ScreenshotImportSection
+        cleanDisabled={Boolean(sourceUrlError)}
+        isCleaning={isCleaningScreenshots}
         message={screenshotMessage}
+        onClean={handleCleanScreenshotsWithAi}
         onMoveDown={(id) => moveScreenshot(id, 1)}
         onMoveUp={(id) => moveScreenshot(id, -1)}
         onPick={handlePickScreenshots}

@@ -24,6 +24,27 @@ export function parseTags(value: string) {
     .filter(Boolean);
 }
 
+export function groupRecipeItemsBySection<T extends { section?: string }>(items: T[]) {
+  const hasSections = items.some((item) => item.section?.trim());
+
+  if (!hasSections) {
+    return [{ items, title: undefined }];
+  }
+
+  return items.reduce<{ items: T[]; title: string }[]>((groups, item) => {
+    const title = item.section?.trim() || 'Main';
+    const currentGroup = groups[groups.length - 1];
+
+    if (currentGroup?.title === title) {
+      currentGroup.items.push(item);
+    } else {
+      groups.push({ items: [item], title });
+    }
+
+    return groups;
+  }, []);
+}
+
 export function formatRecipeTime(minutes?: number) {
   if (!minutes) {
     return null;

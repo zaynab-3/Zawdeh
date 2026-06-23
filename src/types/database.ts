@@ -72,6 +72,7 @@ type RecipeIngredientRow = OwnedRow & {
   quantity: string | null;
   recipe_id: string;
   role: string | null;
+  section: string | null;
   unit: string | null;
 };
 
@@ -84,6 +85,7 @@ type RecipeIngredientInsert = {
   quantity?: string | null;
   recipe_id: string;
   role?: string | null;
+  section?: string | null;
   unit?: string | null;
   user_id: string;
 };
@@ -93,6 +95,7 @@ type RecipeStepRow = OwnedRow & {
   instruction: string;
   position: number;
   recipe_id: string;
+  section: string | null;
   timer_minutes: number | null;
 };
 
@@ -101,6 +104,7 @@ type RecipeStepInsert = {
   instruction: string;
   position: number;
   recipe_id: string;
+  section?: string | null;
   timer_minutes?: number | null;
   user_id: string;
 };

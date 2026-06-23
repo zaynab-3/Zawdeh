@@ -9,7 +9,7 @@ import { AppButton } from '@/components/ui/AppButton';
 import { AppCard } from '@/components/ui/AppCard';
 import { EmptyState } from '@/components/ui/EmptyState';
 import { LoadingState } from '@/components/ui/LoadingState';
-import { getCookabilityLabel, formatRecipeTime } from '@/features/recipes/recipeUtils';
+import { getCookabilityLabel, formatRecipeTime, groupRecipeItemsBySection } from '@/features/recipes/recipeUtils';
 import { useRecipe } from '@/features/recipes/useRecipes';
 import { useShoppingList } from '@/features/shopping/useShoppingList';
 import { fontSize, spacing, useThemeColors } from '@/lib/theme';
@@ -40,6 +40,11 @@ export default function RecipeDetailScreen() {
       [],
     [activeIngredientState.checkedIngredientIds, recipe],
   );
+  const ingredientGroups = React.useMemo(
+    () => groupRecipeItemsBySection(recipe?.ingredients ?? []),
+    [recipe?.ingredients],
+  );
+  const stepGroups = React.useMemo(() => groupRecipeItemsBySection(recipe?.steps ?? []), [recipe?.steps]);
 
   function toggleIngredient(idToToggle: string) {
     setIngredientState((current) => {
@@ -135,13 +140,22 @@ export default function RecipeDetailScreen() {
         <Text selectable style={{ color: colors.mutedText }}>
           Tap ingredients you already have. Unchecked items can be added to shopping.
         </Text>
-        {recipe.ingredients.map((ingredient) => (
-          <IngredientRow
-            ingredient={ingredient}
-            isChecked={activeIngredientState.checkedIngredientIds.includes(ingredient.id)}
-            key={ingredient.id}
-            onToggle={() => toggleIngredient(ingredient.id)}
-          />
+        {ingredientGroups.map((group, groupIndex) => (
+          <React.Fragment key={`${group.title ?? 'ingredients'}-${groupIndex}`}>
+            {group.title ? (
+              <Text selectable style={{ color: colors.text, fontSize: fontSize.md, fontWeight: '800' }}>
+                {group.title}
+              </Text>
+            ) : null}
+            {group.items.map((ingredient) => (
+              <IngredientRow
+                ingredient={ingredient}
+                isChecked={activeIngredientState.checkedIngredientIds.includes(ingredient.id)}
+                key={ingredient.id}
+                onToggle={() => toggleIngredient(ingredient.id)}
+              />
+            ))}
+          </React.Fragment>
         ))}
         <AppButton disabled={missingIngredients.length === 0} onPress={addMissingToShopping} variant="secondary">
           Add missing to shopping
@@ -158,7 +172,18 @@ export default function RecipeDetailScreen() {
           Steps
         </Text>
         {recipe.steps.length > 0 ? (
-          recipe.steps.map((step) => <RecipeStepRow key={step.id} step={step} />)
+          stepGroups.map((group, groupIndex) => (
+            <React.Fragment key={`${group.title ?? 'steps'}-${groupIndex}`}>
+              {group.title ? (
+                <Text selectable style={{ color: colors.text, fontSize: fontSize.md, fontWeight: '800' }}>
+                  {group.title}
+                </Text>
+              ) : null}
+              {group.items.map((step) => (
+                <RecipeStepRow key={step.id} step={step} />
+              ))}
+            </React.Fragment>
+          ))
         ) : (
           <Text selectable style={{ color: colors.mutedText }}>
             No steps added yet. Edit this recipe to add instructions.

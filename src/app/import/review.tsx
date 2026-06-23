@@ -18,55 +18,152 @@ import { useRecipes } from '@/features/recipes/useRecipes';
 import { spacing, useThemeColors } from '@/lib/theme';
 import { hasText, isHttpUrl } from '@/lib/validators';
 
+const COMMON_SECTION_TITLES = new Set([
+  'main',
+  'cake',
+  'sauce',
+  'frosting',
+  'filling',
+  'topping',
+  'dough',
+  'stuffing',
+  'marinade',
+  'batter',
+  'glaze',
+  'cream',
+  'syrup',
+  'base',
+  'assembly',
+]);
+
 function parseMinutes(value: string) {
   const parsed = Number.parseInt(value.trim(), 10);
   return Number.isFinite(parsed) && parsed > 0 ? parsed : undefined;
 }
 
-function parseIngredients(value: string): RecipeIngredient[] {
-  return parseRecipeLines(value).map((line, index) => {
-    if (line.includes('|')) {
-      const [name, quantity, unit, note] = line.split('|').map((part) => part.trim());
+function normalizeSectionTitle(value: string) {
+  return value.trim().replace(/:$/u, '');
+}
 
-      return {
-        id: `ingredient-${index + 1}`,
-        name,
-        note: note || undefined,
-        quantity: quantity || undefined,
-        unit: unit || undefined,
-      };
+function getKnownSections(items: { section?: string }[]) {
+  return new Set(
+    items.map((item) => item.section?.trim().toLowerCase()).filter((item): item is string => Boolean(item)),
+  );
+}
+
+function isSectionHeading(line: string, knownSections: Set<string>) {
+  const normalized = normalizeSectionTitle(line).toLowerCase();
+
+  if (!normalized || line.includes('|') || /\s[—–]\s/u.test(line)) {
+    return false;
+  }
+
+  return line.trim().endsWith(':') || knownSections.has(normalized) || COMMON_SECTION_TITLES.has(normalized);
+}
+
+function parseIngredients(value: string, knownSections: Set<string>): RecipeIngredient[] {
+  let currentSection: string | undefined;
+
+  return parseRecipeLines(value).flatMap((line, index) => {
+    if (isSectionHeading(line, knownSections)) {
+      currentSection = normalizeSectionTitle(line);
+      return [];
+    }
+
+    if (line.includes('|')) {
+      const [name, quantity, unit, note, section] = line.split('|').map((part) => part.trim());
+
+      return [
+        {
+          id: `ingredient-${index + 1}`,
+          name,
+          note: note || undefined,
+          quantity: quantity || undefined,
+          section: section || currentSection,
+          unit: unit || undefined,
+        },
+      ];
     }
 
     const [namePart, detailPart = ''] = line.split(/\s[—–]\s/u).map((part) => part.trim());
     const [amountPart = '', ...noteParts] = detailPart.split(',').map((part) => part.trim());
     const [quantity = '', ...unitParts] = amountPart.split(/\s+/u).filter(Boolean);
 
-    return {
-      id: `ingredient-${index + 1}`,
-      name: namePart,
-      note: noteParts.join(', ') || undefined,
-      quantity: quantity || undefined,
-      unit: unitParts.join(' ') || undefined,
-    };
+    return [
+      {
+        id: `ingredient-${index + 1}`,
+        name: namePart,
+        note: noteParts.join(', ') || undefined,
+        quantity: quantity || undefined,
+        section: currentSection,
+        unit: unitParts.join(' ') || undefined,
+      },
+    ];
   });
 }
 
 function formatIngredients(ingredients: RecipeIngredient[]) {
-  return ingredients
-    .map((ingredient) => {
-      const amount = [ingredient.quantity, ingredient.unit].filter(Boolean).join(' ');
-      const detail = [amount, ingredient.note].filter(Boolean).join(', ');
-      return detail ? `${ingredient.name} — ${detail}` : ingredient.name;
-    })
-    .join('\n');
+  const hasSections = ingredients.some((ingredient) => ingredient.section);
+  const lines: string[] = [];
+  let currentSection: string | undefined;
+
+  ingredients.forEach((ingredient) => {
+    if (hasSections && ingredient.section !== currentSection) {
+      if (lines.length > 0) {
+        lines.push('');
+      }
+
+      currentSection = ingredient.section;
+      lines.push(currentSection || 'Main');
+    }
+
+    const amount = [ingredient.quantity, ingredient.unit].filter(Boolean).join(' ');
+    const detail = [amount, ingredient.note].filter(Boolean).join(', ');
+    lines.push(detail ? `${ingredient.name} — ${detail}` : ingredient.name);
+  });
+
+  return lines.join('\n');
 }
 
-function parseSteps(value: string): RecipeStep[] {
-  return parseRecipeLines(value).map((instruction, index) => ({
-    id: `step-${index + 1}`,
-    instruction,
-    position: index + 1,
-  }));
+function parseSteps(value: string, knownSections: Set<string>): RecipeStep[] {
+  let currentSection: string | undefined;
+
+  return parseRecipeLines(value).flatMap((instruction, index) => {
+    if (isSectionHeading(instruction, knownSections)) {
+      currentSection = normalizeSectionTitle(instruction);
+      return [];
+    }
+
+    return [
+      {
+        id: `step-${index + 1}`,
+        instruction,
+        position: index + 1,
+        section: currentSection,
+      },
+    ];
+  });
+}
+
+function formatSteps(steps: RecipeStep[]) {
+  const hasSections = steps.some((step) => step.section);
+  const lines: string[] = [];
+  let currentSection: string | undefined;
+
+  steps.forEach((step) => {
+    if (hasSections && step.section !== currentSection) {
+      if (lines.length > 0) {
+        lines.push('');
+      }
+
+      currentSection = step.section;
+      lines.push(currentSection || 'Main');
+    }
+
+    lines.push(step.instruction);
+  });
+
+  return lines.join('\n');
 }
 
 export default function ReviewImportScreen() {
@@ -76,12 +173,14 @@ export default function ReviewImportScreen() {
   const isMountedRef = React.useRef(true);
   const draft = React.useMemo(() => getPendingImportReview(), []);
   const reviewMessage = React.useMemo(() => getPendingImportReviewMessage(), []);
+  const knownIngredientSections = React.useMemo(() => getKnownSections(draft?.ingredients ?? []), [draft]);
+  const knownStepSections = React.useMemo(() => getKnownSections(draft?.steps ?? []), [draft]);
   const [cookTimeMinutes, setCookTimeMinutes] = React.useState(
     draft?.cookTimeMinutes ? String(draft.cookTimeMinutes) : '',
   );
   const [error, setError] = React.useState<string | null>(null);
   const [ingredients, setIngredients] = React.useState(draft ? formatIngredients(draft.ingredients) : '');
-  const [instructions, setInstructions] = React.useState(draft?.steps.map((step) => step.instruction).join('\n') ?? '');
+  const [instructions, setInstructions] = React.useState(draft ? formatSteps(draft.steps) : '');
   const [notes, setNotes] = React.useState(draft?.notes ?? '');
   const [prepTimeMinutes, setPrepTimeMinutes] = React.useState(
     draft?.prepTimeMinutes ? String(draft.prepTimeMinutes) : '',
@@ -100,8 +199,8 @@ export default function ReviewImportScreen() {
   }, []);
 
   async function handleSave() {
-    const parsedIngredients = parseIngredients(ingredients);
-    const parsedSteps = parseSteps(instructions);
+    const parsedIngredients = parseIngredients(ingredients, knownIngredientSections);
+    const parsedSteps = parseSteps(instructions, knownStepSections);
 
     if (!hasText(title)) {
       setError('Recipe title is required.');

@@ -9,8 +9,8 @@ import { AppCard } from '@/components/ui/AppCard';
 import { AppInput } from '@/components/ui/AppInput';
 import { createCookModeSession } from '@/features/cook-mode/cookModeApi';
 import { getRecipeDetail } from '@/features/recipes/recipeApi';
+import { groupRecipeItemsBySection } from '@/features/recipes/recipeUtils';
 import type { RecipeDetail } from '@/features/recipes/recipeTypes';
-import { suggestLocalSubstitution } from '@/features/substitutions/substitutionRules';
 import { fontSize, spacing, useThemeColors } from '@/lib/theme';
 
 export default function CookModeScreen() {
@@ -41,7 +41,10 @@ export default function CookModeScreen() {
   }, [id]);
 
   const currentStep = recipe?.steps[session.currentStep - 1];
-  const pepperSuggestion = suggestLocalSubstitution('black pepper');
+  const ingredientGroups = React.useMemo(
+    () => groupRecipeItemsBySection(recipe?.ingredients ?? []),
+    [recipe?.ingredients],
+  );
 
   function goNext() {
     if (!recipe) {
@@ -63,6 +66,11 @@ export default function CookModeScreen() {
         <Text selectable style={{ color: colors.primary, fontSize: fontSize.sm, fontWeight: '800' }}>
           Step {session.currentStep}
         </Text>
+        {currentStep?.section ? (
+          <Text selectable style={{ color: colors.mutedText, fontSize: fontSize.md, fontWeight: '800' }}>
+            {currentStep.section}
+          </Text>
+        ) : null}
         <Text selectable style={{ color: colors.text, fontSize: fontSize.lg, fontWeight: '800', lineHeight: 26 }}>
           {currentStep?.instruction ?? 'Load a recipe to start cooking.'}
         </Text>
@@ -79,20 +87,19 @@ export default function CookModeScreen() {
         <Text selectable style={{ color: colors.text, fontSize: fontSize.lg, fontWeight: '800' }}>
           Ingredient checklist
         </Text>
-        {recipe?.ingredients.map((ingredient) => (
-          <IngredientRow ingredient={ingredient} key={ingredient.id} />
+        {ingredientGroups.map((group, groupIndex) => (
+          <React.Fragment key={`${group.title ?? 'ingredients'}-${groupIndex}`}>
+            {group.title ? (
+              <Text selectable style={{ color: colors.text, fontSize: fontSize.md, fontWeight: '800' }}>
+                {group.title}
+              </Text>
+            ) : null}
+            {group.items.map((ingredient) => (
+              <IngredientRow ingredient={ingredient} key={ingredient.id} />
+            ))}
+          </React.Fragment>
         ))}
       </View>
-
-      <AppCard>
-        <Text selectable style={{ color: colors.text, fontSize: fontSize.md, fontWeight: '800' }}>
-          Missing black pepper
-        </Text>
-        <Text selectable style={{ color: colors.mutedText, fontSize: fontSize.md, lineHeight: 22 }}>
-          {pepperSuggestion.impact}
-        </Text>
-        <AppButton variant="secondary">Add missing to shopping list</AppButton>
-      </AppCard>
 
       <AppInput label="Cooking note" multiline onChangeText={setNote} placeholder="What changed this time?" value={note} />
       <AppButton>Finish session</AppButton>

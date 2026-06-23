@@ -112,6 +112,7 @@ function mapRecipeDetail(
       name: ingredient.name,
       note: ingredient.note ?? undefined,
       quantity: ingredient.quantity ?? undefined,
+      section: ingredient.section ?? undefined,
       unit: ingredient.unit ?? undefined,
     })),
     isFavorite: recipe.is_favorite,
@@ -125,6 +126,7 @@ function mapRecipeDetail(
       id: step.id,
       instruction: step.instruction,
       position: step.position,
+      section: step.section ?? undefined,
       timerMinutes: step.timer_minutes ?? undefined,
     })),
     tags: tags.map((tag) => tag.tag),
@@ -221,6 +223,7 @@ async function replaceRecipeChildren(userId: string, recipe: RecipeDetail) {
     position: index + 1,
     quantity: ingredient.quantity ?? null,
     recipe_id: recipeId,
+    section: ingredient.section ?? null,
     unit: ingredient.unit ?? null,
     user_id: userId,
   }));
@@ -228,6 +231,7 @@ async function replaceRecipeChildren(userId: string, recipe: RecipeDetail) {
     instruction: step.instruction,
     position: index + 1,
     recipe_id: recipeId,
+    section: step.section ?? null,
     timer_minutes: step.timerMinutes ?? null,
     user_id: userId,
   }));
