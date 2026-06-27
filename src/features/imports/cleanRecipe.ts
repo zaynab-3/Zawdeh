@@ -29,7 +29,7 @@ type ImportDiagnosticPath =
   | 'json_ld_recipe'
   | 'manual_caption_cleanup'
   | 'social_metadata_only';
-type SocialUrlPlatform = 'facebook' | 'instagram' | 'tiktok' | 'youtube';
+type SocialUrlPlatform = 'facebook' | 'instagram' | 'pinterest' | 'tiktok' | 'youtube';
 
 type SocialUrlDetection = {
   platform: SocialUrlPlatform;
@@ -88,6 +88,7 @@ const socialHosts: { hosts: string[]; platform: SocialUrlPlatform; sourcePlatfor
   { hosts: ['tiktok.com'], platform: 'tiktok', sourcePlatform: 'TikTok' },
   { hosts: ['facebook.com', 'fb.watch'], platform: 'facebook', sourcePlatform: 'Facebook' },
   { hosts: ['youtube.com', 'youtu.be'], platform: 'youtube', sourcePlatform: 'YouTube' },
+  { hosts: ['pinterest.com'], platform: 'pinterest', sourcePlatform: 'Website' },
 ];
 
 function logImportDiagnostic(path: ImportDiagnosticPath, details: Record<string, unknown> = {}) {
@@ -954,7 +955,7 @@ async function fetchRecipeUrlTextOnDevice(sourceUrl?: string) {
     throw new Error(`Could not fetch this recipe link on device. Site returned HTTP ${response.status}.`);
   }
 
-  const html = (await response.text()).slice(0, 120000);
+  const html = (await response.text()).slice(0, 500000);
   const pageText = buildRecipePageText(html);
   const structuredRecipes = parseStructuredRecipeCandidatesFromHtml(html);
 
@@ -1283,6 +1284,189 @@ async function cleanYouTubeLinkedRecipeUrl(
   return null;
 }
 
+
+function getPinterestMetaContent(html: string, key: string) {
+  const tags = html.match(/<meta\b[^>]*>/giu) ?? [];
+  const escapedKey = key.replace(/[.*+?^${}()|[\]\\]/gu, '\\async function fetchSocialUrlMetadataOnDevice(sourceUrl: string, social: SocialUrlDetection) {');
+
+  for (const tag of tags) {
+    const hasKey = new RegExp(`(?:property|name)=["']${escapedKey}["']`, 'iu').test(tag);
+
+    if (!hasKey) {
+      continue;
+    }
+
+    const content =
+      tag.match(/\bcontent=["']([^"']*)["']/iu)?.[1] ?? tag.match(/\bcontent=([^ >]+)/iu)?.[1] ?? '';
+
+    return normalizeMetadataText(content);
+  }
+
+  return '';
+}
+
+function isLikelyPinterestExternalRecipeUrl(url: string) {
+  try {
+    const parsed = new URL(url);
+    const host = parsed.hostname.toLowerCase().replace(/^www\./u, '');
+    const pathName = parsed.pathname.toLowerCase();
+
+    if (
+      /pinterest|pinimg|arkoselabs|daily\.co|pluot\.blue|amazon-adsystem|w3\.org|schema\.org|google|gstatic|facebook|twitter|x\.com/u.test(
+        host,
+      )
+    ) {
+      return false;
+    }
+
+    if (/\.(?:css|gif|jpeg|jpg|js|mjs|png|svg|webp)(?:$|\?)/u.test(pathName)) {
+      return false;
+    }
+
+    return isLikelyRecipeWebsiteUrl(url);
+  } catch {
+    return false;
+  }
+}
+
+async function fetchPinterestMetadata(
+  sourceUrl: string,
+  social: SocialUrlDetection,
+): Promise<SocialUrlMetadata | null> {
+  try {
+    const response = await fetch(sourceUrl, {
+      headers: {
+        Accept: 'text/html,application/xhtml+xml,application/xml;q=0.9,application/json,text/plain,*/*;q=0.8',
+        'Accept-Language': 'en-US,en;q=0.9,ar;q=0.8,fr;q=0.7',
+        'User-Agent':
+          'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/126.0.0.0 Safari/537.36',
+      },
+      method: 'GET',
+    });
+
+    if (!response.ok) {
+      return null;
+    }
+
+    const html = await response.text();
+    const title =
+      getPinterestMetaContent(html, 'og:title') ||
+      getPinterestMetaContent(html, 'twitter:title') ||
+      getPinterestMetaContent(html, 'title');
+    const description =
+      getPinterestMetaContent(html, 'og:description') ||
+      getPinterestMetaContent(html, 'description') ||
+      getPinterestMetaContent(html, 'twitter:description');
+    const rawText = [title, description].filter(Boolean).join('\n\n');
+
+    if (!rawText) {
+      return null;
+    }
+
+    return {
+      ...social,
+      description: description || undefined,
+      rawText,
+      title: title || social.sourcePlatform,
+      url: sourceUrl,
+    };
+  } catch {
+    return null;
+  }
+}
+
+async function cleanPinterestLinkedRecipeUrl(
+  input: RecipeImportInput,
+  social: SocialUrlDetection,
+): Promise<RecipeImportReview[] | null> {
+  const sourceUrl = input.sourceUrl?.trim();
+
+  if (!sourceUrl) {
+    return null;
+  }
+
+  try {
+    const response = await fetch(sourceUrl, {
+      headers: {
+        Accept: 'text/html,application/xhtml+xml,application/xml;q=0.9,application/json,text/plain,*/*;q=0.8',
+        'Accept-Language': 'en-US,en;q=0.9,ar;q=0.8,fr;q=0.7',
+        'User-Agent':
+          'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/126.0.0.0 Safari/537.36',
+      },
+      method: 'GET',
+    });
+
+    if (!response.ok) {
+      return null;
+    }
+
+    const html = await response.text();
+    const searchableHtml = html
+      .replace(/\\u002F/gu, '/')
+      .replace(/\\u003A/gu, ':')
+      .replace(/\\u0026/gu, '&')
+      .replace(/\\\//gu, '/')
+      .replace(/&amp;/gu, '&');
+    const recipeUrls = extractUrlsFromText(searchableHtml)
+      .filter(isLikelyPinterestExternalRecipeUrl)
+      .map((url) => url.replace(/^http:\/\//iu, 'https://'))
+      .filter((url, index, values) => values.indexOf(url) === index)
+      .slice(0, 5);
+
+    for (const recipeUrl of recipeUrls) {
+      try {
+        const fetched = await fetchRecipeUrlTextOnDevice(recipeUrl);
+
+        if (fetched.structuredRecipes.length > 0) {
+          logImportDiagnostic('json_ld_recipe', {
+            linkedRecipeUrl: recipeUrl,
+            recipeCount: fetched.structuredRecipes.length,
+            socialPlatform: 'Pinterest',
+            sourcePlatform: social.sourcePlatform,
+            sourceUrl,
+          });
+
+          return parseReviews(
+            {
+              ...input,
+              rawText: fetched.rawText,
+              sourcePlatform: social.sourcePlatform,
+              sourceType: 'website',
+              sourceUrl: recipeUrl,
+            },
+            { recipes: fetched.structuredRecipes },
+            URL_AI_NOT_READY_MESSAGE,
+          );
+        }
+
+        if (hasEnoughRecipeText(fetched.rawText)) {
+          logImportDiagnostic('ai_cleanup_fallback', {
+            linkedRecipeUrl: recipeUrl,
+            socialPlatform: 'Pinterest',
+            sourcePlatform: social.sourcePlatform,
+            sourceUrl,
+            textLength: fetched.rawText.length,
+          });
+
+          return await cleanRecipeWithAi({
+            ...input,
+            rawText: fetched.rawText.slice(0, 8000),
+            sourcePlatform: social.sourcePlatform,
+            sourceType: 'website',
+            sourceUrl: recipeUrl,
+          });
+        }
+      } catch {
+        // Try the next likely recipe URL from the Pinterest pin.
+      }
+    }
+  } catch {
+    return null;
+  }
+
+  return null;
+}
+
 async function fetchSocialUrlMetadataOnDevice(sourceUrl: string, social: SocialUrlDetection) {
   if (social.platform === 'instagram') {
     const oembedMetadata = await fetchInstagramOembedMetadata(sourceUrl, social);
@@ -1307,6 +1491,16 @@ async function fetchSocialUrlMetadataOnDevice(sourceUrl: string, social: SocialU
     if (youtubeMetadata) {
       return youtubeMetadata;
     }
+  }
+
+  if (social.platform === 'pinterest') {
+    const pinterestMetadata = await fetchPinterestMetadata(sourceUrl, social);
+
+    if (pinterestMetadata) {
+      return pinterestMetadata;
+    }
+
+    throw new Error('Could not read Pinterest pin metadata.');
   }
 
   const fetchUrl = social.platform === 'instagram' ? getInstagramCanonicalUrl(sourceUrl) : sourceUrl;
@@ -1393,6 +1587,14 @@ async function cleanSocialRecipeUrlWithAi(input: RecipeImportInput, social: Soci
 
   if (social.platform === 'youtube') {
     const linkedRecipeReviews = await cleanYouTubeLinkedRecipeUrl(input, social, metadata);
+
+    if (linkedRecipeReviews) {
+      return linkedRecipeReviews;
+    }
+  }
+
+  if (social.platform === 'pinterest') {
+    const linkedRecipeReviews = await cleanPinterestLinkedRecipeUrl(input, social);
 
     if (linkedRecipeReviews) {
       return linkedRecipeReviews;
