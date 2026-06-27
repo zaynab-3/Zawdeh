@@ -1069,6 +1069,121 @@ async function fetchTikTokOembedMetadata(
   }
 }
 
+function getNumericFacebookVideoId(value?: string | null) {
+  const trimmed = value?.trim();
+  return trimmed && /^\d{5,}$/u.test(trimmed) ? trimmed : null;
+}
+
+function getFacebookVideoIdFromUrl(sourceUrl: string) {
+  try {
+    const url = new URL(sourceUrl.trim());
+    const host = url.hostname.toLowerCase().replace(/^www\./u, '');
+
+    if (!host.endsWith('facebook.com')) {
+      return null;
+    }
+
+    const pathname = url.pathname.replace(/\/{2,}/gu, '/');
+    const lowerPathname = pathname.toLowerCase();
+
+    if (lowerPathname === '/watch' || lowerPathname === '/watch/') {
+      return getNumericFacebookVideoId(url.searchParams.get('v'));
+    }
+
+    if (lowerPathname === '/video.php') {
+      return getNumericFacebookVideoId(url.searchParams.get('v'));
+    }
+
+    const segments = pathname.split('/').filter(Boolean);
+    const lowerSegments = segments.map((segment) => segment.toLowerCase());
+
+    if (lowerSegments[0] === 'reel') {
+      return getNumericFacebookVideoId(segments[1]);
+    }
+
+    const videosIndex = lowerSegments.findIndex((segment) => segment === 'videos');
+
+    if (videosIndex !== -1) {
+      for (let index = segments.length - 1; index > videosIndex; index -= 1) {
+        const videoId = getNumericFacebookVideoId(segments[index]);
+
+        if (videoId) {
+          return videoId;
+        }
+      }
+    }
+  } catch {
+    return null;
+  }
+
+  return null;
+}
+
+function getFacebookOembedCandidateUrls(sourceUrl: string) {
+  const trimmedUrl = sourceUrl.trim();
+  const videoId = getFacebookVideoIdFromUrl(trimmedUrl);
+  const candidates = videoId ? [`https://www.facebook.com/watch/?v=${videoId}`, trimmedUrl] : [trimmedUrl];
+
+  return candidates.filter(Boolean).filter((candidate, index, values) => values.indexOf(candidate) === index);
+}
+
+function parseFacebookOembedHtmlText(value: unknown) {
+  return typeof value === 'string' ? normalizeMetadataText(value) : '';
+}
+
+async function fetchFacebookGraphOembedMetadata(
+  sourceUrl: string,
+  social: SocialUrlDetection,
+): Promise<SocialUrlMetadata | null> {
+  for (const candidateUrl of getFacebookOembedCandidateUrls(sourceUrl)) {
+    const oembedUrl = 'https://graph.facebook.com/v25.0/oembed_video?url=' + encodeURIComponent(candidateUrl);
+
+    try {
+      const response = await fetch(oembedUrl, {
+        headers: {
+          Accept: 'application/json,text/plain,*/*',
+          'Accept-Language': 'en-US,en;q=0.9,ar;q=0.8,fr;q=0.7',
+        },
+      });
+
+      if (!response.ok) {
+        continue;
+      }
+
+      const data = (await response.json()) as {
+        author_name?: unknown;
+        html?: unknown;
+        title?: unknown;
+      };
+      const rawText = parseFacebookOembedHtmlText(data.html);
+
+      if (!hasEnoughRecipeText(rawText)) {
+        continue;
+      }
+
+      const title = normalizeMetadataText(
+        typeof data.title === 'string'
+          ? data.title
+          : typeof data.author_name === 'string'
+            ? data.author_name
+            : social.sourcePlatform,
+      );
+
+      return {
+        ...social,
+        description: undefined,
+        rawText,
+        title: title || social.sourcePlatform,
+        url: sourceUrl,
+      };
+    } catch {
+      // Try the next Facebook oEmbed candidate.
+    }
+  }
+
+  return null;
+}
+
 
 function getJsonObjectAfterMarker(html: string, marker: string) {
   const markerStart = html.indexOf(marker);
@@ -1483,6 +1598,20 @@ async function fetchSocialUrlMetadataOnDevice(sourceUrl: string, social: SocialU
     if (oembedMetadata) {
       return oembedMetadata;
     }
+  }
+
+  if (social.platform === 'facebook') {
+    const oembedMetadata = await fetchFacebookGraphOembedMetadata(sourceUrl, social);
+
+    if (oembedMetadata) {
+      return oembedMetadata;
+    }
+
+    return {
+      ...social,
+      rawText: '',
+      url: sourceUrl,
+    };
   }
 
   if (social.platform === 'youtube') {
