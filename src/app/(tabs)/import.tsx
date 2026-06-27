@@ -15,8 +15,10 @@ import {
 import {
   prepareAiImportReview,
   prepareAiScreenshotImportReview,
+  prepareAiUrlImportReview,
   prepareImportReview,
 } from '@/features/imports/importApi';
+import { detectImportSource } from '@/features/imports/sourcePlatformDetection';
 import { ScreenshotImportSection } from '@/features/imports/ScreenshotImportSection';
 import type { SelectedScreenshot, SourcePlatform } from '@/features/imports/importTypes';
 import { sourcePlatforms } from '@/lib/constants';
@@ -100,12 +102,13 @@ export default function ImportScreen() {
   const [error, setError] = React.useState<string | null>(null);
   const [isCleaning, setIsCleaning] = React.useState(false);
   const [isCleaningScreenshots, setIsCleaningScreenshots] = React.useState(false);
+  const [isImportingUrl, setIsImportingUrl] = React.useState(false);
   const [rawText, setRawText] = React.useState('');
   const [screenshotMessage, setScreenshotMessage] = React.useState<string | null>(null);
   const [screenshots, setScreenshots] = React.useState<SelectedScreenshot[]>([]);
   const [sourcePlatform, setSourcePlatform] = React.useState<SourcePlatform>('Instagram');
   const [sourceUrl, setSourceUrl] = React.useState('');
-  const sourceUrlError = isHttpUrl(sourceUrl) ? undefined : 'Use a valid http or https link.';
+  const sourceUrlError = sourceUrl.trim() && !isHttpUrl(sourceUrl) ? 'Use a valid http or https link.' : undefined;
 
   React.useEffect(() => {
     return () => {
@@ -113,13 +116,20 @@ export default function ImportScreen() {
     };
   }, []);
 
-  function getImportInput() {
+  function getImportInput(importKind: 'caption' | 'screenshot' | 'url', sourceUrlOverride = sourceUrl) {
+    const source = detectImportSource({
+      importKind,
+      rawText,
+      selectedPlatform: importKind === 'screenshot' && sourcePlatform === 'Caption' ? undefined : sourcePlatform,
+      sourceUrl: sourceUrlOverride,
+    });
+
     return {
       rawText,
-      sourcePlatform,
-      sourceType: 'caption' as const,
-      sourceUrl,
-      targetLanguage: 'en',
+      sourcePlatform: source.platform,
+      sourceType: source.sourceType,
+      sourceUrl: sourceUrlOverride,
+      targetLanguage: 'original',
     };
   }
 
@@ -143,7 +153,7 @@ export default function ImportScreen() {
     }
 
     setError(null);
-    await prepareImportReview(getImportInput());
+    await prepareImportReview(getImportInput('caption'));
     if (isMountedRef.current) {
       router.push('/import/review');
     }
@@ -157,13 +167,13 @@ export default function ImportScreen() {
     try {
       setError(null);
       setIsCleaning(true);
-      const reviews = await prepareAiImportReview(getImportInput());
+      const reviews = await prepareAiImportReview(getImportInput('caption'));
 
       if (isMountedRef.current) {
         router.push(reviews.length > 1 ? '/import/results' : '/import/review');
       }
     } catch {
-      await prepareImportReview(getImportInput(), AI_CLEANER_NOT_READY_MESSAGE);
+      await prepareImportReview(getImportInput('caption'), AI_CLEANER_NOT_READY_MESSAGE);
 
       if (isMountedRef.current) {
         router.push('/import/review');
@@ -171,6 +181,37 @@ export default function ImportScreen() {
     } finally {
       if (isMountedRef.current) {
         setIsCleaning(false);
+      }
+    }
+  }
+
+  async function handleImportUrlWithAi() {
+    const trimmedUrl = sourceUrl.trim();
+
+    if (!trimmedUrl || sourceUrlError) {
+      setError(sourceUrlError ?? 'Use a valid http or https link.');
+      return;
+    }
+
+    try {
+      setError(null);
+      setIsImportingUrl(true);
+      const reviews = await prepareAiUrlImportReview(getImportInput('url', trimmedUrl));
+
+      if (isMountedRef.current) {
+        router.push(reviews.length > 1 ? '/import/results' : '/import/review');
+      }
+    } catch (importError) {
+      if (isMountedRef.current) {
+        setError(
+          importError instanceof Error
+            ? importError.message
+            : 'Could not import this recipe link. Paste the recipe text or use screenshots instead.',
+        );
+      }
+    } finally {
+      if (isMountedRef.current) {
+        setIsImportingUrl(false);
       }
     }
   }
@@ -253,7 +294,7 @@ export default function ImportScreen() {
       setError(null);
       setScreenshotMessage(null);
       setIsCleaningScreenshots(true);
-      const reviews = await prepareAiScreenshotImportReview(getImportInput(), images);
+      const reviews = await prepareAiScreenshotImportReview(getImportInput('screenshot'), images);
 
       if (isMountedRef.current) {
         setScreenshots([]);
@@ -318,6 +359,12 @@ export default function ImportScreen() {
         placeholder="https://..."
         value={sourceUrl}
       />
+      <AppButton
+        disabled={!sourceUrl.trim() || Boolean(sourceUrlError) || isImportingUrl}
+        onPress={handleImportUrlWithAi}
+        variant="secondary">
+        {isImportingUrl ? 'Importing recipe link...' : 'Import from URL'}
+      </AppButton>
 
       <AppCard>
         <Text selectable style={{ color: colors.text, fontSize: fontSize.md, fontWeight: '800' }}>
