@@ -9,7 +9,7 @@ export const AI_CLEANER_NOT_READY_MESSAGE = 'AI cleaner is not ready yet. You ca
 export const SCREENSHOT_AI_NOT_READY_MESSAGE = 'Could not read screenshots yet. You can paste the text manually.';
 export const URL_AI_NOT_READY_MESSAGE = 'Could not import this recipe link yet. You can paste the recipe text manually.';
 export const SOCIAL_CAPTION_UNAVAILABLE_MESSAGE =
-  'We couldn’t read the caption from this social link. Paste the caption or use screenshot import.';
+  'This social link did not include enough recipe details to import automatically. Use screenshot import or paste the full recipe text.';
 export const MANUAL_CAPTION_CLEANUP_FAILED_MESSAGE = 'Caption did not contain enough recipe details.';
 
 type CleanRecipeConfidence = 'low' | 'medium' | 'high';
@@ -1026,12 +1026,62 @@ async function fetchInstagramOembedMetadata(
   }
 }
 
+async function fetchTikTokOembedMetadata(
+  sourceUrl: string,
+  social: SocialUrlDetection,
+): Promise<SocialUrlMetadata | null> {
+  const oembedUrl = 'https://www.tiktok.com/oembed?url=' + encodeURIComponent(sourceUrl);
+
+  try {
+    const response = await fetch(oembedUrl, {
+      headers: {
+        Accept: 'application/json,text/plain,*/*',
+        'Accept-Language': 'en-US,en;q=0.9,ar;q=0.8,fr;q=0.7',
+      },
+    });
+
+    if (!response.ok) {
+      return null;
+    }
+
+    const data = (await response.json()) as {
+      author_name?: string;
+      html?: string;
+      title?: string;
+    };
+
+    const caption = normalizeMetadataText(data.title ?? '');
+
+    if (!caption || isGenericSocialMetadata(caption)) {
+      return null;
+    }
+
+    return {
+      ...social,
+      description: undefined,
+      rawText: caption,
+      title: normalizeMetadataText(data.author_name || social.sourcePlatform),
+      url: sourceUrl,
+    };
+  } catch {
+    return null;
+  }
+}
+
 async function fetchSocialUrlMetadataOnDevice(sourceUrl: string, social: SocialUrlDetection) {
   if (social.platform === 'instagram') {
     const oembedMetadata = await fetchInstagramOembedMetadata(sourceUrl, social);
     const oembedText = oembedMetadata ? buildSocialMetadataText(oembedMetadata) : '';
 
     if (oembedMetadata && hasEnoughRecipeText(oembedText)) {
+      return oembedMetadata;
+    }
+  }
+
+  if (social.platform === 'tiktok') {
+    const oembedMetadata = await fetchTikTokOembedMetadata(sourceUrl, social);
+
+    if (oembedMetadata) {
       return oembedMetadata;
     }
   }
