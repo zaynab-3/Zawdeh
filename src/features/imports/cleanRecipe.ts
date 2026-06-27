@@ -1068,6 +1068,221 @@ async function fetchTikTokOembedMetadata(
   }
 }
 
+
+function getJsonObjectAfterMarker(html: string, marker: string) {
+  const markerStart = html.indexOf(marker);
+
+  if (markerStart === -1) {
+    return null;
+  }
+
+  const objectStart = html.indexOf('{', markerStart);
+
+  if (objectStart === -1) {
+    return null;
+  }
+
+  let depth = 0;
+  let escaped = false;
+  let inString = false;
+
+  for (let index = objectStart; index < html.length; index += 1) {
+    const char = html[index];
+
+    if (inString) {
+      if (escaped) {
+        escaped = false;
+      } else if (char === '\\') {
+        escaped = true;
+      } else if (char === '"') {
+        inString = false;
+      }
+
+      continue;
+    }
+
+    if (char === '"') {
+      inString = true;
+    } else if (char === '{') {
+      depth += 1;
+    } else if (char === '}') {
+      depth -= 1;
+
+      if (depth === 0) {
+        return html.slice(objectStart, index + 1);
+      }
+    }
+  }
+
+  return null;
+}
+
+function extractUrlsFromText(text: string) {
+  const urls = [...text.matchAll(/https?:\/\/[^\s<>"')\]]+/giu)]
+    .map((match) => match[0].replace(/[.,;:!?]+$/gu, '').trim())
+    .filter(Boolean);
+
+  return urls.filter((url, index) => urls.indexOf(url) === index);
+}
+
+function isLikelyRecipeWebsiteUrl(url: string) {
+  try {
+    const parsed = new URL(url);
+    const host = parsed.hostname.toLowerCase().replace(/^www\./u, '');
+    const pathAndHost = `${host}${parsed.pathname}`.toLowerCase();
+
+    if (
+      /youtube|youtu\.be|facebook|instagram|tiktok|patreon|amazon|amzn\.to|airtable|playlist|subscribe|shop|store|merch|twitter|x\.com|t\.co|linktr\.ee|lnk\.to|spotify|apple|deezer/u.test(
+        pathAndHost,
+      )
+    ) {
+      return false;
+    }
+
+    if (/\/videos?\//u.test(parsed.pathname.toLowerCase())) {
+      return false;
+    }
+
+    return /recipe|recipes|recette|receta|tasty|buzzfeed|babish|food|cook|kitchen|cuisine|baking|bread|cake|cookie|pasta|dessert/u.test(
+      pathAndHost,
+    );
+  } catch {
+    return false;
+  }
+}
+
+function extractLikelyRecipeUrlsFromYouTubeDescription(description: string) {
+  const labeledUrls = [
+    ...description.matchAll(
+      /(?:recipe|full recipe|written recipe|recette|receta)\s*[:\-–—]?\s*(https?:\/\/[^\s<>"')\]]+)/giu,
+    ),
+  ].map((match) => match[1].replace(/[.,;:!?]+$/gu, '').trim());
+
+  const allUrls = extractUrlsFromText(description);
+  const likelyUrls = allUrls.filter(isLikelyRecipeWebsiteUrl);
+  const merged = [...labeledUrls, ...likelyUrls].filter(Boolean);
+
+  return merged.filter((url, index) => merged.indexOf(url) === index).slice(0, 5);
+}
+
+async function fetchYouTubeMetadata(
+  sourceUrl: string,
+  social: SocialUrlDetection,
+): Promise<SocialUrlMetadata | null> {
+  try {
+    const response = await fetch(sourceUrl, {
+      headers: {
+        Accept: 'text/html,application/xhtml+xml,application/xml;q=0.9,application/json,text/plain,*/*;q=0.8',
+        'Accept-Language': 'en-US,en;q=0.9,ar;q=0.8,fr;q=0.7',
+        'User-Agent':
+          'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/126.0.0.0 Safari/537.36',
+      },
+      method: 'GET',
+    });
+
+    if (!response.ok) {
+      return null;
+    }
+
+    const html = await response.text();
+    const playerRaw = getJsonObjectAfterMarker(html, 'var ytInitialPlayerResponse =');
+
+    if (!playerRaw) {
+      return null;
+    }
+
+    const player = JSON.parse(playerRaw) as Record<string, unknown>;
+    const videoDetails = isRecord(player.videoDetails) ? player.videoDetails : {};
+    const microformat = isRecord(player.microformat) ? player.microformat : {};
+    const playerMicroformatRenderer = isRecord(microformat.playerMicroformatRenderer)
+      ? microformat.playerMicroformatRenderer
+      : {};
+    const microformatDescription = isRecord(playerMicroformatRenderer.description)
+      ? playerMicroformatRenderer.description
+      : {};
+
+    const title = normalizeMetadataText(typeof videoDetails.title === 'string' ? videoDetails.title : '');
+    const description = normalizeMetadataText(
+      typeof videoDetails.shortDescription === 'string'
+        ? videoDetails.shortDescription
+        : typeof microformatDescription.simpleText === 'string'
+          ? microformatDescription.simpleText
+          : '',
+    );
+    const rawText = [title, description].filter(Boolean).join('\n\n');
+
+    if (!rawText) {
+      return null;
+    }
+
+    return {
+      ...social,
+      description: description || undefined,
+      rawText,
+      title: title || social.sourcePlatform,
+      url: sourceUrl,
+    };
+  } catch {
+    return null;
+  }
+}
+
+async function cleanYouTubeLinkedRecipeUrl(
+  input: RecipeImportInput,
+  social: SocialUrlDetection,
+  metadata: SocialUrlMetadata,
+): Promise<RecipeImportReview[] | null> {
+  const recipeUrls = extractLikelyRecipeUrlsFromYouTubeDescription(metadata.description ?? metadata.rawText);
+
+  for (const recipeUrl of recipeUrls) {
+    try {
+      const fetched = await fetchRecipeUrlTextOnDevice(recipeUrl);
+
+      if (fetched.structuredRecipes.length > 0) {
+        logImportDiagnostic('json_ld_recipe', {
+          linkedRecipeUrl: recipeUrl,
+          recipeCount: fetched.structuredRecipes.length,
+          sourcePlatform: social.sourcePlatform,
+          sourceUrl: input.sourceUrl,
+        });
+
+        return parseReviews(
+          {
+            ...input,
+            rawText: fetched.rawText,
+            sourcePlatform: social.sourcePlatform,
+            sourceType: 'website',
+            sourceUrl: recipeUrl,
+          },
+          { recipes: fetched.structuredRecipes },
+          URL_AI_NOT_READY_MESSAGE,
+        );
+      }
+
+      if (hasEnoughRecipeText(fetched.rawText)) {
+        logImportDiagnostic('ai_cleanup_fallback', {
+          linkedRecipeUrl: recipeUrl,
+          sourcePlatform: social.sourcePlatform,
+          sourceUrl: input.sourceUrl,
+          textLength: fetched.rawText.length,
+        });
+
+        return await cleanRecipeWithAi({
+          ...input,
+          rawText: fetched.rawText.slice(0, 8000),
+          sourcePlatform: social.sourcePlatform,
+          sourceType: 'website',
+          sourceUrl: recipeUrl,
+        });
+      }
+    } catch {
+      // Try the next likely recipe URL from the YouTube description.
+    }
+  }
+
+  return null;
+}
+
 async function fetchSocialUrlMetadataOnDevice(sourceUrl: string, social: SocialUrlDetection) {
   if (social.platform === 'instagram') {
     const oembedMetadata = await fetchInstagramOembedMetadata(sourceUrl, social);
@@ -1083,6 +1298,14 @@ async function fetchSocialUrlMetadataOnDevice(sourceUrl: string, social: SocialU
 
     if (oembedMetadata) {
       return oembedMetadata;
+    }
+  }
+
+  if (social.platform === 'youtube') {
+    const youtubeMetadata = await fetchYouTubeMetadata(sourceUrl, social);
+
+    if (youtubeMetadata) {
+      return youtubeMetadata;
     }
   }
 
@@ -1166,6 +1389,14 @@ async function cleanSocialRecipeUrlWithAi(input: RecipeImportInput, social: Soci
       sourceUrl,
     });
     return [createSocialMetadataReview(input, social)];
+  }
+
+  if (social.platform === 'youtube') {
+    const linkedRecipeReviews = await cleanYouTubeLinkedRecipeUrl(input, social, metadata);
+
+    if (linkedRecipeReviews) {
+      return linkedRecipeReviews;
+    }
   }
 
   const metadataText = buildSocialMetadataText(metadata);
