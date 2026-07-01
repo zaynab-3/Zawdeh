@@ -12,11 +12,11 @@ on public.profiles (lower(username))
 where username is not null;
 
 create index profiles_username_trgm_idx
-on public.profiles using gin (username gin_trgm_ops)
+on public.profiles using gin (username extensions.gin_trgm_ops)
 where username is not null;
 
 create index profiles_display_name_trgm_idx
-on public.profiles using gin (display_name gin_trgm_ops)
+on public.profiles using gin (display_name extensions.gin_trgm_ops)
 where display_name is not null;
 
 alter table public.recipes
