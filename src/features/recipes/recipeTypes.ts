@@ -1,3 +1,5 @@
+import type { Visibility } from '@/types/database';
+
 export type CookabilityState = 'ready_as_is' | 'ready_with_substitutions' | 'needs_shopping';
 
 export type RecipeIngredient = {
@@ -28,12 +30,16 @@ export type RecipeSummary = {
   isFavorite: boolean;
   mealType: string;
   prepTimeMinutes?: number;
+  originalLanguage?: string;
+  savedLanguage?: string;
   servings?: string;
   sourcePlatform?: string;
+  sourceType?: string;
   sourceUrl?: string;
   tags: string[];
   title: string;
   updatedAt?: string;
+  visibility: Visibility;
 };
 
 export type RecipeDetail = RecipeSummary & {
@@ -52,11 +58,15 @@ export type RecipeDraft = {
   isFavorite?: boolean;
   mealType?: string;
   notes: string;
+  originalLanguage?: string;
   prepTimeMinutes?: number;
+  savedLanguage?: string;
   servings?: string;
   sourcePlatform?: string;
+  sourceType?: string;
   sourceUrl?: string;
   steps: RecipeStep[];
   tags: string[];
   title: string;
+  visibility?: Visibility;
 };

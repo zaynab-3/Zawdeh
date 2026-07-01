@@ -3,6 +3,7 @@ export type ShoppingItem = {
   createdAt?: string;
   id: string;
   isChecked: boolean;
+  listId?: string;
   name: string;
   quantity?: string;
   recipeId?: string;
@@ -12,6 +13,7 @@ export type ShoppingItem = {
 
 export type ShoppingDraft = {
   category?: string;
+  listId?: string;
   name: string;
   quantity?: string;
   recipeId?: string;

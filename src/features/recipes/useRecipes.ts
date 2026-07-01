@@ -1,7 +1,9 @@
 import * as React from 'react';
 
+import { useI18n } from '@/features/preferences/i18n';
 import { deleteRecipe, listRecipeDetails, saveRecipe as saveRecipeToApi, toggleFavoriteRecipe } from '@/features/recipes/recipeApi';
 import { subscribeRecipes } from '@/features/recipes/recipeStore';
+import { getRecipeForDisplay, recipeNeedsDisplayTranslation } from '@/features/recipes/recipeTranslation';
 import type { RecipeDetail, RecipeDraft } from '@/features/recipes/recipeTypes';
 import { getSafeDataErrorMessage } from '@/lib/supabaseStatus';
 
@@ -27,10 +29,22 @@ function matchesRecipe(recipe: RecipeDetail, query: string) {
     .includes(normalizedQuery);
 }
 
-export function useRecipes() {
+type UseRecipesOptions = {
+  translate?: boolean;
+};
+
+function getRecipeListSignature(recipes: RecipeDetail[]) {
+  return recipes.map((recipe) => `${recipe.id}:${recipe.updatedAt ?? recipe.createdAt ?? ''}`).join('|');
+}
+
+export function useRecipes(options: UseRecipesOptions = {}) {
+  const { language } = useI18n();
+  const shouldTranslate = options.translate ?? true;
   const [error, setError] = React.useState<string | null>(null);
   const [isLoading, setIsLoading] = React.useState(true);
+  const [isTranslating, setIsTranslating] = React.useState(false);
   const [query, setQuery] = React.useState('');
+  const [displayRecipes, setDisplayRecipes] = React.useState<RecipeDetail[]>([]);
   const [recipes, setRecipes] = React.useState<RecipeDetail[]>([]);
 
   React.useEffect(() => {
@@ -40,6 +54,7 @@ export function useRecipes() {
       .then((nextRecipes) => {
         if (isMounted) {
           setRecipes(nextRecipes);
+          setDisplayRecipes(nextRecipes);
           setError(null);
         }
       })
@@ -57,6 +72,7 @@ export function useRecipes() {
     const unsubscribe = subscribeRecipes((nextRecipes) => {
       if (isMounted) {
         setRecipes(nextRecipes);
+        setDisplayRecipes(nextRecipes);
       }
     });
 
@@ -66,12 +82,64 @@ export function useRecipes() {
     };
   }, []);
 
+  const recipeListSignature = React.useMemo(() => getRecipeListSignature(recipes), [recipes]);
+
+  React.useEffect(() => {
+    let isMounted = true;
+
+    async function translateRecipesForDisplay() {
+      await Promise.resolve();
+
+      if (!isMounted) {
+        return;
+      }
+
+      setDisplayRecipes(recipes);
+
+      if (!shouldTranslate || !recipes.some((recipe) => recipeNeedsDisplayTranslation(recipe, language))) {
+        setIsTranslating(false);
+        return;
+      }
+
+      setIsTranslating(true);
+
+      let nextRecipes = recipes;
+
+      for (const recipe of recipes) {
+        try {
+          const translatedRecipe = await getRecipeForDisplay(recipe, language);
+
+          if (!isMounted) {
+            return;
+          }
+
+          if (translatedRecipe !== recipe) {
+            nextRecipes = nextRecipes.map((item) => (item.id === recipe.id ? translatedRecipe : item));
+            setDisplayRecipes(nextRecipes);
+          }
+        } catch {
+          // Translation is optional. If the Edge Function fails, keep showing the original recipe.
+        }
+      }
+
+      if (isMounted) {
+        setIsTranslating(false);
+      }
+    }
+
+    void translateRecipesForDisplay();
+
+    return () => {
+      isMounted = false;
+    };
+  }, [language, recipeListSignature, recipes, shouldTranslate]);
+
   const filteredRecipes = React.useMemo(
-    () => recipes.filter((recipe) => matchesRecipe(recipe, query)),
-    [query, recipes],
+    () => displayRecipes.filter((recipe) => matchesRecipe(recipe, query)),
+    [displayRecipes, query],
   );
-  const favoriteRecipes = React.useMemo(() => recipes.filter((recipe) => recipe.isFavorite), [recipes]);
-  const recentRecipes = React.useMemo(() => recipes.slice(0, 5), [recipes]);
+  const favoriteRecipes = React.useMemo(() => displayRecipes.filter((recipe) => recipe.isFavorite), [displayRecipes]);
+  const recentRecipes = React.useMemo(() => displayRecipes.slice(0, 5), [displayRecipes]);
 
   const saveRecipe = React.useCallback(async (draft: RecipeDraft) => {
     try {
@@ -99,7 +167,9 @@ export function useRecipes() {
       setError(null);
       await deleteRecipe(id);
     } catch (removeError) {
-      setError(getSafeDataErrorMessage(removeError, 'Recipe could not be removed.'));
+      const message = getSafeDataErrorMessage(removeError, 'Recipe could not be deleted.');
+      setError(message);
+      throw new Error(message);
     }
   }, []);
 
@@ -108,9 +178,10 @@ export function useRecipes() {
     favoriteRecipes,
     filteredRecipes,
     isLoading,
+    isTranslating,
     query,
     recentRecipes,
-    recipes,
+    recipes: displayRecipes,
     removeRecipe,
     saveRecipe,
     setQuery,
@@ -118,8 +189,8 @@ export function useRecipes() {
   };
 }
 
-export function useRecipe(id?: string) {
-  const recipeState = useRecipes();
+export function useRecipe(id?: string, options?: UseRecipesOptions) {
+  const recipeState = useRecipes(options);
   const recipe = React.useMemo(
     () => recipeState.recipes.find((item) => item.id === id) ?? null,
     [id, recipeState.recipes],

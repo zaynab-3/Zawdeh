@@ -1,5 +1,6 @@
 import AsyncStorage from '@react-native-async-storage/async-storage';
 
+import { normalizeDetectedLanguage } from '@/features/imports/languageDetection';
 import type { RecipeDetail, RecipeDraft, RecipeIngredient, RecipeStep, RecipeSummary } from '@/features/recipes/recipeTypes';
 
 const RECIPES_STORAGE_KEY = 'zawdeh.recipes.v1';
@@ -29,9 +30,12 @@ const seedRecipes: RecipeDetail[] = [
     isFavorite: true,
     mealType: 'Dinner',
     notes: ['Works with bulgur instead of rice.'],
+    originalLanguage: 'en',
     prepTimeMinutes: 10,
+    savedLanguage: 'en',
     servings: '4',
     sourcePlatform: 'Manual',
+    sourceType: 'manual',
     steps: [
       { id: 'step-1', instruction: 'Cook lentils until just tender.', position: 1, timerMinutes: 18 },
       { id: 'step-2', instruction: 'Add rice and simmer until soft.', position: 2, timerMinutes: 20 },
@@ -40,6 +44,7 @@ const seedRecipes: RecipeDetail[] = [
     tags: ['pantry', 'vegan'],
     title: 'Mjadra',
     updatedAt: '2026-06-21T00:00:00.000Z',
+    visibility: 'private',
   },
   {
     cookability: 'needs_shopping',
@@ -55,13 +60,17 @@ const seedRecipes: RecipeDetail[] = [
     isFavorite: false,
     mealType: 'Lunch',
     notes: ['Review imported details before saving.'],
+    originalLanguage: 'en',
     prepTimeMinutes: 12,
+    savedLanguage: 'en',
     servings: '2',
     sourcePlatform: 'Import draft',
+    sourceType: 'caption',
     steps: [{ id: 'step-1', instruction: 'Chop and toss everything together.', position: 1 }],
     tags: ['imported', 'fresh'],
     title: 'Imported Salad Draft',
     updatedAt: '2026-06-21T00:00:00.000Z',
+    visibility: 'private',
   },
 ];
 
@@ -142,14 +151,19 @@ export function buildRecipeFromDraft(draft: RecipeDraft, current?: RecipeDetail)
     isFavorite: draft.isFavorite ?? current?.isFavorite ?? false,
     mealType: draft.mealType?.trim() || current?.mealType || 'Anytime',
     notes,
+    originalLanguage:
+      draft.originalLanguage === undefined ? current?.originalLanguage : normalizeDetectedLanguage(draft.originalLanguage),
     prepTimeMinutes: draft.prepTimeMinutes ?? current?.prepTimeMinutes,
+    savedLanguage: draft.savedLanguage?.trim() || current?.savedLanguage || 'en',
     servings: draft.servings?.trim() || current?.servings,
     sourcePlatform: draft.sourcePlatform?.trim() || current?.sourcePlatform || 'Manual',
+    sourceType: draft.sourceType?.trim() || current?.sourceType || (draft.sourcePlatform === 'Manual' ? 'manual' : 'caption'),
     sourceUrl: draft.sourceUrl?.trim() || current?.sourceUrl,
     steps,
     tags,
     title: draft.title.trim(),
     updatedAt: now,
+    visibility: draft.visibility ?? current?.visibility ?? 'private',
   };
 }
 

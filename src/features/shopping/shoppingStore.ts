@@ -113,6 +113,7 @@ export async function addShoppingItem(draft: ShoppingDraft) {
     createdAt: existingItem?.createdAt ?? now,
     id: existingItem?.id ?? normalizedName,
     isChecked: false,
+    listId: draft.listId ?? existingItem?.listId,
     name: draft.name.trim(),
     quantity: draft.quantity?.trim() || existingItem?.quantity,
     recipeId: draft.recipeId ?? existingItem?.recipeId,
@@ -138,6 +139,7 @@ export async function addRecipeIngredientsToShopping(recipeId: string, ingredien
       createdAt: now,
       id: normalizeIngredientName(ingredient.name) || generateId('shopping'),
       isChecked: false,
+      listId: undefined,
       name: ingredient.name.trim(),
       quantity: ingredient.quantity?.trim(),
       recipeId,
@@ -172,6 +174,7 @@ export async function updateShoppingItem(id: string, draft: ShoppingDraft) {
   const nextItem: ShoppingItem = {
     ...existingItem,
     category: draft.category?.trim() || existingItem.category,
+    listId: draft.listId ?? existingItem.listId,
     name: draft.name.trim() || existingItem.name,
     quantity: draft.quantity?.trim() || existingItem.quantity,
     recipeId: draft.recipeId ?? existingItem.recipeId,

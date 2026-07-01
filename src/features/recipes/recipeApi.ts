@@ -13,7 +13,7 @@ import {
 import type { CookabilityState, RecipeDetail, RecipeDraft, RecipeSummary } from '@/features/recipes/recipeTypes';
 import { getSupabase } from '@/lib/supabase';
 import { getAuthenticatedUser } from '@/lib/supabaseSession';
-import { throwIfDatabaseNotReady } from '@/lib/supabaseStatus';
+import { isNetworkUnavailableError, throwIfDatabaseNotReady } from '@/lib/supabaseStatus';
 import type { Database } from '@/types/database';
 
 type RecipeRow = Database['public']['Tables']['recipes']['Row'];
@@ -65,13 +65,16 @@ function createRecipeInsert(recipe: RecipeDetail, userId: string): RecipeInsert 
     description: nullIfBlank(recipe.description),
     is_favorite: recipe.isFavorite,
     meal_type: nullIfBlank(recipe.mealType),
+    original_language: nullIfBlank(recipe.originalLanguage),
     prep_time_minutes: recipe.prepTimeMinutes ?? null,
+    saved_language: recipe.savedLanguage ?? 'en',
     servings: nullIfBlank(recipe.servings),
     source_platform: nullIfBlank(recipe.sourcePlatform),
-    source_type: recipe.sourcePlatform === 'Manual' ? 'manual' : 'caption',
+    source_type: nullIfBlank(recipe.sourceType) ?? (recipe.sourcePlatform === 'Manual' ? 'manual' : 'caption'),
     source_url: nullIfBlank(recipe.sourceUrl),
     title: recipe.title.trim(),
     user_id: userId,
+    visibility: recipe.visibility ?? 'private',
   };
 }
 
@@ -83,12 +86,15 @@ function createRecipeUpdate(recipe: RecipeDetail): RecipeUpdate {
     is_favorite: recipe.isFavorite,
     is_deleted: false,
     meal_type: nullIfBlank(recipe.mealType),
+    original_language: nullIfBlank(recipe.originalLanguage),
     prep_time_minutes: recipe.prepTimeMinutes ?? null,
+    saved_language: recipe.savedLanguage ?? 'en',
     servings: nullIfBlank(recipe.servings),
     source_platform: nullIfBlank(recipe.sourcePlatform),
-    source_type: recipe.sourcePlatform === 'Manual' ? 'manual' : 'caption',
+    source_type: nullIfBlank(recipe.sourceType) ?? (recipe.sourcePlatform === 'Manual' ? 'manual' : 'caption'),
     source_url: nullIfBlank(recipe.sourceUrl),
     title: recipe.title.trim(),
+    visibility: recipe.visibility ?? 'private',
   };
 }
 
@@ -118,9 +124,12 @@ function mapRecipeDetail(
     isFavorite: recipe.is_favorite,
     mealType: recipe.meal_type ?? 'Anytime',
     notes: notes.map((note) => note.note),
+    originalLanguage: recipe.original_language ?? undefined,
     prepTimeMinutes: recipe.prep_time_minutes ?? undefined,
+    savedLanguage: recipe.saved_language,
     servings: recipe.servings ?? undefined,
     sourcePlatform: recipe.source_platform ?? undefined,
+    sourceType: recipe.source_type,
     sourceUrl: recipe.source_url ?? undefined,
     steps: steps.map((step) => ({
       id: step.id,
@@ -132,6 +141,7 @@ function mapRecipeDetail(
     tags: tags.map((tag) => tag.tag),
     title: recipe.title,
     updatedAt: recipe.updated_at,
+    visibility: recipe.visibility,
   };
 }
 
@@ -308,7 +318,9 @@ export async function listRecipeDetails(): Promise<RecipeDetail[]> {
     return replaceRecipeCache(recipes);
   } catch (error) {
     throwIfDatabaseNotReady(error);
-    console.warn('Unable to load recipes from Supabase', error);
+    if (!isNetworkUnavailableError(error)) {
+      console.warn('Unable to load recipes from Supabase', error);
+    }
     return loadRecipes();
   }
 }
@@ -354,7 +366,9 @@ export async function getRecipeDetail(id: string): Promise<RecipeDetail | null> 
     return recipe;
   } catch (error) {
     throwIfDatabaseNotReady(error);
-    console.warn('Unable to load recipe from Supabase', error);
+    if (!isNetworkUnavailableError(error)) {
+      console.warn('Unable to load recipe from Supabase', error);
+    }
     return getRecipeDetailFromStore(id);
   }
 }
@@ -411,15 +425,21 @@ export async function deleteRecipe(id: string) {
     return;
   }
 
-  const { error } = await getSupabase()
+  const { data, error } = await getSupabase()
     .from('recipes')
-    .update({ deleted_at: new Date().toISOString(), is_deleted: true })
+    .delete()
     .eq('id', id)
-    .eq('user_id', user.id);
+    .eq('user_id', user.id)
+    .select('id')
+    .maybeSingle();
 
   if (error) {
     throwIfDatabaseNotReady(error);
     throw error;
+  }
+
+  if (!data) {
+    throw new Error('Recipe could not be deleted.');
   }
 
   await removeRecipeFromCache(id);

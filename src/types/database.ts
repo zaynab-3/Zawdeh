@@ -12,6 +12,18 @@ type TimestampColumns = {
   updated_at: string;
 };
 
+export type Visibility = 'private' | 'shared' | 'public';
+export type SharePermission = 'view' | 'edit';
+export type NotificationType =
+  | 'user_followed'
+  | 'recipe_shared'
+  | 'recipe_access_removed'
+  | 'shopping_list_shared'
+  | 'shopping_list_access_removed'
+  | 'collection_shared'
+  | 'collection_access_removed';
+export type NotificationEntityType = 'profile' | 'recipe' | 'shopping_list' | 'collection';
+
 type OwnedRow = {
   id: string;
   user_id: string;
@@ -35,6 +47,7 @@ type RecipeRow = OwnedRow &
     source_type: string;
     source_url: string | null;
     title: string;
+    visibility: Visibility;
   };
 
 type RecipeInsert = {
@@ -56,6 +69,7 @@ type RecipeInsert = {
   source_url?: string | null;
   title: string;
   user_id: string;
+  visibility?: Visibility;
 };
 
 type RecipeUpdate = Partial<Omit<RecipeInsert, 'id' | 'user_id'>> & {
@@ -135,6 +149,27 @@ type RecipeTagInsert = {
   user_id: string;
 };
 
+type RecipeTranslationRow = OwnedRow &
+  TimestampColumns & {
+    content: Json;
+    provider: string;
+    recipe_id: string;
+    target_language: string;
+  };
+
+type RecipeTranslationInsert = {
+  content: Json;
+  id?: string;
+  provider?: string;
+  recipe_id: string;
+  target_language: string;
+  user_id: string;
+};
+
+type RecipeTranslationUpdate = Partial<Omit<RecipeTranslationInsert, 'id' | 'recipe_id' | 'user_id'>> & {
+  updated_at?: string;
+};
+
 type PantryItemRow = OwnedRow &
   TimestampColumns & {
     category: string | null;
@@ -182,6 +217,7 @@ type ShoppingItemRow = OwnedRow &
     source_recipe_id: string | null;
     source_type: string;
     unit: string | null;
+    list_id: string | null;
   };
 
 type ShoppingItemInsert = {
@@ -194,6 +230,7 @@ type ShoppingItemInsert = {
   source_type?: string;
   unit?: string | null;
   user_id: string;
+  list_id?: string | null;
 };
 
 type ShoppingItemUpdate = Partial<Omit<ShoppingItemInsert, 'id' | 'user_id'>> & {
@@ -206,6 +243,7 @@ type ProfileRow = OwnedRow &
     display_name: string | null;
     preferred_language: string;
     theme: string;
+    username: string | null;
   };
 
 type ProfileInsert = {
@@ -215,6 +253,7 @@ type ProfileInsert = {
   preferred_language?: string;
   theme?: string;
   user_id: string;
+  username?: string | null;
 };
 
 type ProfileUpdate = Partial<Omit<ProfileInsert, 'id' | 'user_id'>> & {
@@ -227,6 +266,7 @@ type MealPlanRow = OwnedRow &
     meal_slot: string;
     planned_date: string;
     recipe_id: string | null;
+    visibility: Visibility;
   };
 
 type CookSessionRow = OwnedRow &
@@ -256,6 +296,137 @@ type UserRateLimitRow = OwnedRow &
     count: number;
   };
 
+type UserFollowRow = {
+  created_at: string;
+  follower_id: string;
+  following_id: string;
+};
+
+type UserFollowInsert = {
+  follower_id: string;
+  following_id: string;
+};
+
+type UserFollowUpdate = Partial<UserFollowInsert>;
+
+type ShareRow = TimestampColumns & {
+  id: string;
+  owner_id: string;
+  permission: SharePermission;
+  shared_with_user_id: string;
+};
+
+type RecipeShareRow = ShareRow & {
+  recipe_id: string;
+};
+
+type RecipeShareInsert = {
+  id?: string;
+  owner_id: string;
+  permission?: SharePermission;
+  recipe_id: string;
+  shared_with_user_id: string;
+};
+
+type RecipeShareUpdate = Partial<Pick<RecipeShareInsert, 'permission'>> & {
+  updated_at?: string;
+};
+
+type ShoppingListRow = OwnedRow &
+  TimestampColumns & {
+    name: string;
+    visibility: Visibility;
+  };
+
+type ShoppingListInsert = {
+  id?: string;
+  name?: string;
+  user_id: string;
+  visibility?: Visibility;
+};
+
+type ShoppingListUpdate = Partial<Omit<ShoppingListInsert, 'id' | 'user_id'>> & {
+  updated_at?: string;
+};
+
+type ShoppingListShareRow = ShareRow & {
+  list_id: string;
+};
+
+type ShoppingListShareInsert = {
+  id?: string;
+  list_id: string;
+  owner_id: string;
+  permission?: SharePermission;
+  shared_with_user_id: string;
+};
+
+type ShoppingListShareUpdate = Partial<Pick<ShoppingListShareInsert, 'permission'>> & {
+  updated_at?: string;
+};
+
+type RecipeCollectionRow = OwnedRow &
+  TimestampColumns & {
+    description: string | null;
+    name: string;
+    visibility: Visibility;
+  };
+
+type RecipeCollectionInsert = {
+  description?: string | null;
+  id?: string;
+  name: string;
+  user_id: string;
+  visibility?: Visibility;
+};
+
+type RecipeCollectionUpdate = Partial<Omit<RecipeCollectionInsert, 'id' | 'user_id'>> & {
+  updated_at?: string;
+};
+
+type CollectionShareRow = ShareRow & {
+  collection_id: string;
+};
+
+type CollectionShareInsert = {
+  collection_id: string;
+  id?: string;
+  owner_id: string;
+  permission?: SharePermission;
+  shared_with_user_id: string;
+};
+
+type CollectionShareUpdate = Partial<Pick<CollectionShareInsert, 'permission'>> & {
+  updated_at?: string;
+};
+
+type CollectionRecipeRow = {
+  collection_id: string;
+  created_at: string;
+  owner_id: string;
+  recipe_id: string;
+};
+
+type CollectionRecipeInsert = {
+  collection_id: string;
+  owner_id: string;
+  recipe_id: string;
+};
+
+type NotificationRow = {
+  actor_user_id: string | null;
+  created_at: string;
+  entity_id: string;
+  entity_type: NotificationEntityType;
+  id: string;
+  metadata: Json;
+  read_at: string | null;
+  type: NotificationType;
+  user_id: string;
+};
+
+type NotificationUpdate = Partial<Pick<NotificationRow, 'read_at'>>;
+
 export type Database = {
   public: {
     CompositeTypes: Record<string, never>;
@@ -264,17 +435,26 @@ export type Database = {
     Tables: {
       cook_session_notes: Table<RecipeNoteRow & { cook_session_id: string }, { cook_session_id: string; note: string; user_id: string; id?: string }, Partial<{ note: string }>>;
       cook_sessions: Table<CookSessionRow, { recipe_id: string; user_id: string; current_step?: number; id?: string; status?: string }, Partial<{ current_step: number; finished_at: string | null; status: string }>>;
+      collection_recipes: Table<CollectionRecipeRow, CollectionRecipeInsert, Partial<CollectionRecipeInsert>>;
+      collection_shares: Table<CollectionShareRow, CollectionShareInsert, CollectionShareUpdate>;
       favorite_ingredients: Table<FavoriteIngredientRow, FavoriteIngredientInsert, Partial<FavoriteIngredientInsert>>;
-      meal_plans: Table<MealPlanRow, { meal_slot: string; planned_date: string; user_id: string; custom_title?: string | null; id?: string; recipe_id?: string | null }, Partial<{ custom_title: string | null; meal_slot: string; planned_date: string; recipe_id: string | null }>>;
+      meal_plans: Table<MealPlanRow, { meal_slot: string; planned_date: string; user_id: string; custom_title?: string | null; id?: string; recipe_id?: string | null; visibility?: Visibility }, Partial<{ custom_title: string | null; meal_slot: string; planned_date: string; recipe_id: string | null; visibility: Visibility }>>;
+      notifications: Table<NotificationRow, never, NotificationUpdate>;
       pantry_items: Table<PantryItemRow, PantryItemInsert, PantryItemUpdate>;
       profiles: Table<ProfileRow, ProfileInsert, ProfileUpdate>;
+      recipe_collections: Table<RecipeCollectionRow, RecipeCollectionInsert, RecipeCollectionUpdate>;
       recipe_imports: Table<RecipeImportRow, { user_id: string; confidence?: string | null; created_recipe_id?: string | null; error_code?: string | null; id?: string; source_platform?: string | null; source_type?: string | null; source_url?: string | null; status?: string }, Partial<{ confidence: string | null; created_recipe_id: string | null; error_code: string | null; source_platform: string | null; source_type: string | null; source_url: string | null; status: string }>>;
       recipe_ingredients: Table<RecipeIngredientRow, RecipeIngredientInsert, Partial<RecipeIngredientInsert>>;
       recipe_notes: Table<RecipeNoteRow, RecipeNoteInsert, Partial<RecipeNoteInsert>>;
+      recipe_shares: Table<RecipeShareRow, RecipeShareInsert, RecipeShareUpdate>;
       recipe_steps: Table<RecipeStepRow, RecipeStepInsert, Partial<RecipeStepInsert>>;
       recipe_tags: Table<RecipeTagRow, RecipeTagInsert, Partial<RecipeTagInsert>>;
+      recipe_translations: Table<RecipeTranslationRow, RecipeTranslationInsert, RecipeTranslationUpdate>;
       recipes: Table<RecipeRow, RecipeInsert, RecipeUpdate>;
+      shopping_list_shares: Table<ShoppingListShareRow, ShoppingListShareInsert, ShoppingListShareUpdate>;
+      shopping_lists: Table<ShoppingListRow, ShoppingListInsert, ShoppingListUpdate>;
       shopping_items: Table<ShoppingItemRow, ShoppingItemInsert, ShoppingItemUpdate>;
+      user_follows: Table<UserFollowRow, UserFollowInsert, UserFollowUpdate>;
       user_rate_limits: Table<UserRateLimitRow, { action: string; user_id: string; action_date?: string; count?: number; id?: string }, Partial<{ action: string; action_date: string; count: number }>>;
     };
     Views: Record<string, never>;
