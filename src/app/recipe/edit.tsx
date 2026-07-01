@@ -6,9 +6,12 @@ import { Screen } from '@/components/layout/Screen';
 import { AppButton } from '@/components/ui/AppButton';
 import { AppInput } from '@/components/ui/AppInput';
 import { LoadingState } from '@/components/ui/LoadingState';
+import { useI18n } from '@/features/preferences/i18n';
 import type { RecipeDetail, RecipeDraft, RecipeIngredient, RecipeStep } from '@/features/recipes/recipeTypes';
 import { parseRecipeLines, parseTags } from '@/features/recipes/recipeUtils';
 import { useRecipe } from '@/features/recipes/useRecipes';
+import { VisibilitySegmentedControl } from '@/features/social/components/VisibilitySegmentedControl';
+import type { Visibility } from '@/types/database';
 import { spacing, useThemeColors } from '@/lib/theme';
 import { hasText, isHttpUrl } from '@/lib/validators';
 
@@ -129,15 +132,16 @@ type EditRecipeFormProps = {
 function EditRecipeForm({ loadError, recipe, saveRecipe }: EditRecipeFormProps) {
   const colors = useThemeColors();
   const router = useRouter();
+  const { language, t } = useI18n();
   const [cookTimeMinutes, setCookTimeMinutes] = React.useState(
     recipe?.cookTimeMinutes ? String(recipe.cookTimeMinutes) : '',
   );
-  const [cuisine, setCuisine] = React.useState(recipe?.cuisine ?? 'Home cooking');
+  const [cuisine, setCuisine] = React.useState(recipe?.cuisine ?? t('recipe.defaultCuisine'));
   const [description, setDescription] = React.useState(recipe?.description ?? '');
   const [error, setError] = React.useState<string | null>(null);
   const [ingredients, setIngredients] = React.useState(recipe ? formatIngredients(recipe.ingredients) : '');
   const [instructions, setInstructions] = React.useState(recipe ? formatSteps(recipe.steps) : '');
-  const [mealType, setMealType] = React.useState(recipe?.mealType ?? 'Anytime');
+  const [mealType, setMealType] = React.useState(recipe?.mealType ?? t('recipe.defaultMeal'));
   const [notes, setNotes] = React.useState(recipe ? recipe.notes.join('\n') : '');
   const [prepTimeMinutes, setPrepTimeMinutes] = React.useState(
     recipe?.prepTimeMinutes ? String(recipe.prepTimeMinutes) : '',
@@ -147,6 +151,7 @@ function EditRecipeForm({ loadError, recipe, saveRecipe }: EditRecipeFormProps) 
   const [sourceUrl, setSourceUrl] = React.useState(recipe?.sourceUrl ?? '');
   const [tags, setTags] = React.useState(recipe ? recipe.tags.join(', ') : '');
   const [title, setTitle] = React.useState(recipe?.title ?? '');
+  const [visibility, setVisibility] = React.useState<Visibility>(recipe?.visibility ?? 'private');
   const knownIngredientSections = React.useMemo(() => getKnownSections(recipe?.ingredients ?? []), [recipe]);
   const knownStepSections = React.useMemo(() => getKnownSections(recipe?.steps ?? []), [recipe]);
 
@@ -155,17 +160,17 @@ function EditRecipeForm({ loadError, recipe, saveRecipe }: EditRecipeFormProps) 
     const parsedSteps = parseSteps(instructions, knownStepSections);
 
     if (!hasText(title)) {
-      setError('Recipe title is required.');
+      setError(t('edit.titleRequired'));
       return;
     }
 
     if (parsedIngredients.length === 0 && parsedSteps.length === 0) {
-      setError('Add at least one ingredient or one instruction.');
+      setError(t('edit.addInstructionError'));
       return;
     }
 
     if (!isHttpUrl(sourceUrl)) {
-      setError('Source URL must start with http:// or https://.');
+      setError(t('edit.urlError'));
       return;
     }
 
@@ -181,23 +186,27 @@ function EditRecipeForm({ loadError, recipe, saveRecipe }: EditRecipeFormProps) 
         isFavorite: recipe?.isFavorite,
         mealType,
         notes,
+        originalLanguage: recipe?.originalLanguage,
         prepTimeMinutes: parseMinutes(prepTimeMinutes),
+        savedLanguage: recipe?.originalLanguage ?? recipe?.savedLanguage ?? language,
         servings,
         sourcePlatform,
+        sourceType: recipe?.sourceType ?? (sourcePlatform === 'Manual' ? 'manual' : 'caption'),
         sourceUrl,
         steps: parsedSteps,
         tags: parseTags(tags),
         title,
+        visibility,
       });
 
       router.replace({ pathname: '/recipe/[id]', params: { id: savedRecipe.id } });
     } catch {
-      setError('Recipe could not be saved.');
+      setError(t('edit.saveError'));
     }
   }
 
   return (
-    <Screen subtitle="Save a recipe manually while database writes are still being configured." title="Save my version">
+    <Screen subtitle={t('edit.subtitle')} title={t('edit.title')}>
       {loadError ? (
         <Text selectable style={{ color: colors.danger }}>
           {loadError}
@@ -209,27 +218,28 @@ function EditRecipeForm({ loadError, recipe, saveRecipe }: EditRecipeFormProps) 
         </Text>
       ) : null}
 
-      <AppInput label="Title" onChangeText={setTitle} placeholder="Recipe name" value={title} />
+      <AppInput label={t('common.title')} onChangeText={setTitle} placeholder={t('edit.recipeNamePlaceholder')} value={title} />
+      <VisibilitySegmentedControl onChange={setVisibility} value={visibility} />
       <AppInput
-        label="Description"
+        label={t('edit.description')}
         multiline
         onChangeText={setDescription}
-        placeholder="Short summary"
+        placeholder={t('edit.descriptionPlaceholder')}
         value={description}
       />
       <View style={{ flexDirection: 'row', gap: spacing.sm }}>
         <AppInput
           containerStyle={{ flex: 1 }}
-          label="Cuisine"
+          label={t('common.cuisine')}
           onChangeText={setCuisine}
-          placeholder="Lebanese"
+          placeholder={t('edit.cuisinePlaceholder')}
           value={cuisine}
         />
         <AppInput
           containerStyle={{ flex: 1 }}
-          label="Meal"
+          label={t('edit.meal')}
           onChangeText={setMealType}
-          placeholder="Dinner"
+          placeholder={t('edit.mealPlaceholder')}
           value={mealType}
         />
       </View>
@@ -237,7 +247,7 @@ function EditRecipeForm({ loadError, recipe, saveRecipe }: EditRecipeFormProps) 
         <AppInput
           containerStyle={{ flex: 1 }}
           keyboardType="number-pad"
-          label="Prep min"
+          label={t('common.prepMin')}
           onChangeText={setPrepTimeMinutes}
           placeholder="10"
           value={prepTimeMinutes}
@@ -245,33 +255,33 @@ function EditRecipeForm({ loadError, recipe, saveRecipe }: EditRecipeFormProps) 
         <AppInput
           containerStyle={{ flex: 1 }}
           keyboardType="number-pad"
-          label="Cook min"
+          label={t('common.cookMin')}
           onChangeText={setCookTimeMinutes}
           placeholder="25"
           value={cookTimeMinutes}
         />
       </View>
-      <AppInput label="Servings" onChangeText={setServings} placeholder="4" value={servings} />
+      <AppInput label={t('common.servings')} onChangeText={setServings} placeholder="4" value={servings} />
       <AppInput
-        label="Ingredients"
+        label={t('recipeDetail.ingredients')}
         multiline
         onChangeText={setIngredients}
-        placeholder="Rice | 1 | cup"
+        placeholder={t('edit.ingredientsPlaceholder')}
         value={ingredients}
       />
       <AppInput
-        label="Instructions"
+        label={t('review.instructionsLabel')}
         multiline
         onChangeText={setInstructions}
-        placeholder="One step per line"
+        placeholder={t('edit.instructionsPlaceholder')}
         value={instructions}
       />
-      <AppInput label="Tags" onChangeText={setTags} placeholder="pantry, quick, vegan" value={tags} />
-      <AppInput label="Notes" multiline onChangeText={setNotes} placeholder="One note per line" value={notes} />
-      <AppInput label="Source" onChangeText={setSourcePlatform} placeholder="Manual, Instagram, TikTok" value={sourcePlatform} />
-      <AppInput label="Source URL" onChangeText={setSourceUrl} placeholder="https://..." value={sourceUrl} />
+      <AppInput label={t('common.tags')} onChangeText={setTags} placeholder={t('edit.tagsPlaceholder')} value={tags} />
+      <AppInput label={t('recipe.notes')} multiline onChangeText={setNotes} placeholder={t('edit.notesPlaceholder')} value={notes} />
+      <AppInput label={t('edit.source')} onChangeText={setSourcePlatform} placeholder={t('edit.sourcePlaceholder')} value={sourcePlatform} />
+      <AppInput label={t('common.sourceLink')} onChangeText={setSourceUrl} placeholder="https://..." value={sourceUrl} />
       <AppButton disabled={!hasText(title)} onPress={handleSave}>
-        Save recipe
+        {t('action.saveRecipe')}
       </AppButton>
     </Screen>
   );
@@ -280,12 +290,13 @@ function EditRecipeForm({ loadError, recipe, saveRecipe }: EditRecipeFormProps) 
 export default function EditRecipeScreen() {
   const { id } = useLocalSearchParams<{ id?: string }>();
   const recipeId = typeof id === 'string' ? id : undefined;
-  const { error: loadError, isLoading, recipe, saveRecipe } = useRecipe(recipeId);
+  const { error: loadError, isLoading, recipe, saveRecipe } = useRecipe(recipeId, { translate: false });
+  const { t } = useI18n();
 
   if (recipeId && isLoading) {
     return (
-      <Screen title="Save my version">
-        <LoadingState label="Loading recipe" />
+      <Screen title={t('edit.title')}>
+        <LoadingState label={t('edit.loadRecipe')} />
       </Screen>
     );
   }

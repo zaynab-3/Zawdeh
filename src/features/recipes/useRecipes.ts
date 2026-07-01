@@ -1,7 +1,13 @@
 import * as React from 'react';
 
 import { useI18n } from '@/features/preferences/i18n';
-import { deleteRecipe, listRecipeDetails, saveRecipe as saveRecipeToApi, toggleFavoriteRecipe } from '@/features/recipes/recipeApi';
+import {
+  deleteRecipe,
+  listRecipeDetails,
+  saveRecipe as saveRecipeToApi,
+  toggleFavoriteRecipe,
+  type RecipeListScope,
+} from '@/features/recipes/recipeApi';
 import { subscribeRecipes } from '@/features/recipes/recipeStore';
 import { getRecipeForDisplay, recipeNeedsDisplayTranslation } from '@/features/recipes/recipeTranslation';
 import type { RecipeDetail, RecipeDraft } from '@/features/recipes/recipeTypes';
@@ -30,6 +36,7 @@ function matchesRecipe(recipe: RecipeDetail, query: string) {
 }
 
 type UseRecipesOptions = {
+  scope?: RecipeListScope;
   translate?: boolean;
 };
 
@@ -39,6 +46,7 @@ function getRecipeListSignature(recipes: RecipeDetail[]) {
 
 export function useRecipes(options: UseRecipesOptions = {}) {
   const { language } = useI18n();
+  const scope = options.scope ?? 'all';
   const shouldTranslate = options.translate ?? true;
   const [error, setError] = React.useState<string | null>(null);
   const [isLoading, setIsLoading] = React.useState(true);
@@ -50,7 +58,7 @@ export function useRecipes(options: UseRecipesOptions = {}) {
   React.useEffect(() => {
     let isMounted = true;
 
-    listRecipeDetails()
+    listRecipeDetails(scope)
       .then((nextRecipes) => {
         if (isMounted) {
           setRecipes(nextRecipes);
@@ -80,7 +88,7 @@ export function useRecipes(options: UseRecipesOptions = {}) {
       isMounted = false;
       unsubscribe();
     };
-  }, []);
+  }, [scope]);
 
   const recipeListSignature = React.useMemo(() => getRecipeListSignature(recipes), [recipes]);
 

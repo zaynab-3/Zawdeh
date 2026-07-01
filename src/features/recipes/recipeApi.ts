@@ -14,7 +14,7 @@ import type { CookabilityState, RecipeDetail, RecipeDraft, RecipeSummary } from 
 import { getSupabase } from '@/lib/supabase';
 import { getAuthenticatedUser } from '@/lib/supabaseSession';
 import { isNetworkUnavailableError, throwIfDatabaseNotReady } from '@/lib/supabaseStatus';
-import type { Database } from '@/types/database';
+import type { Database, Visibility } from '@/types/database';
 
 type RecipeRow = Database['public']['Tables']['recipes']['Row'];
 type RecipeInsert = Database['public']['Tables']['recipes']['Insert'];
@@ -27,6 +27,7 @@ type NoteRow = Database['public']['Tables']['recipe_notes']['Row'];
 type NoteInsert = Database['public']['Tables']['recipe_notes']['Insert'];
 type TagRow = Database['public']['Tables']['recipe_tags']['Row'];
 type TagInsert = Database['public']['Tables']['recipe_tags']['Insert'];
+export type RecipeListScope = 'all' | 'mine' | 'shared' | 'public';
 
 const uuidPattern = /^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i;
 
@@ -141,18 +142,26 @@ function mapRecipeDetail(
     tags: tags.map((tag) => tag.tag),
     title: recipe.title,
     updatedAt: recipe.updated_at,
+    userId: recipe.user_id,
     visibility: recipe.visibility,
   };
 }
 
-async function fetchRemoteRecipes(userId: string, recipeId?: string) {
+async function fetchRemoteRecipes(userId: string, recipeId?: string, scope: RecipeListScope = 'all') {
   const supabase = getSupabase();
   let recipeQuery = supabase
     .from('recipes')
     .select('*')
-    .eq('user_id', userId)
     .eq('is_deleted', false)
     .order('updated_at', { ascending: false });
+
+  if (scope === 'mine') {
+    recipeQuery = recipeQuery.eq('user_id', userId);
+  } else if (scope === 'shared') {
+    recipeQuery = recipeQuery.eq('visibility', 'shared' satisfies Visibility).neq('user_id', userId);
+  } else if (scope === 'public') {
+    recipeQuery = recipeQuery.eq('visibility', 'public' satisfies Visibility);
+  }
 
   if (recipeId) {
     recipeQuery = recipeQuery.eq('id', recipeId);
@@ -176,10 +185,10 @@ async function fetchRemoteRecipes(userId: string, recipeId?: string) {
     { data: notes, error: notesError },
     { data: tags, error: tagsError },
   ] = await Promise.all([
-    supabase.from('recipe_ingredients').select('*').eq('user_id', userId).in('recipe_id', recipeIds).order('position'),
-    supabase.from('recipe_steps').select('*').eq('user_id', userId).in('recipe_id', recipeIds).order('position'),
-    supabase.from('recipe_notes').select('*').eq('user_id', userId).in('recipe_id', recipeIds).order('created_at'),
-    supabase.from('recipe_tags').select('*').eq('user_id', userId).in('recipe_id', recipeIds).order('tag'),
+    supabase.from('recipe_ingredients').select('*').in('recipe_id', recipeIds).order('position'),
+    supabase.from('recipe_steps').select('*').in('recipe_id', recipeIds).order('position'),
+    supabase.from('recipe_notes').select('*').in('recipe_id', recipeIds).order('created_at'),
+    supabase.from('recipe_tags').select('*').in('recipe_id', recipeIds).order('tag'),
   ]);
 
   const childError = ingredientsError ?? stepsError ?? notesError ?? tagsError;
@@ -306,7 +315,7 @@ async function saveRemoteRecipe(userId: string, draft: RecipeDraft) {
   return savedRecipe;
 }
 
-export async function listRecipeDetails(): Promise<RecipeDetail[]> {
+export async function listRecipeDetails(scope: RecipeListScope = 'all'): Promise<RecipeDetail[]> {
   const user = await getAuthenticatedUser();
 
   if (!user) {
@@ -314,7 +323,7 @@ export async function listRecipeDetails(): Promise<RecipeDetail[]> {
   }
 
   try {
-    const recipes = await fetchRemoteRecipes(user.id);
+    const recipes = await fetchRemoteRecipes(user.id, undefined, scope);
     return replaceRecipeCache(recipes);
   } catch (error) {
     throwIfDatabaseNotReady(error);
@@ -325,7 +334,7 @@ export async function listRecipeDetails(): Promise<RecipeDetail[]> {
   }
 }
 
-export async function listRecipeSummaries(query: string): Promise<RecipeSummary[]> {
+export async function listRecipeSummaries(query: string, scope: RecipeListScope = 'all'): Promise<RecipeSummary[]> {
   const user = await getAuthenticatedUser();
 
   if (!user) {
@@ -333,7 +342,7 @@ export async function listRecipeSummaries(query: string): Promise<RecipeSummary[
   }
 
   const normalizedQuery = query.trim().toLowerCase();
-  const recipes = await listRecipeDetails();
+  const recipes = await listRecipeDetails(scope);
   const summaries = recipes.map(summarize);
 
   if (!normalizedQuery) {

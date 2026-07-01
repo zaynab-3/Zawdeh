@@ -39,6 +39,7 @@ export type RecipeSummary = {
   tags: string[];
   title: string;
   updatedAt?: string;
+  userId?: string;
   visibility: Visibility;
 };
 

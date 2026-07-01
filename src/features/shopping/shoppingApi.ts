@@ -73,7 +73,7 @@ function createShoppingUpdate(draft: ShoppingDraft): ShoppingItemUpdate {
   };
 }
 
-async function getOrCreateDefaultShoppingList(userId: string): Promise<ShoppingListRow> {
+export async function getOrCreateDefaultShoppingList(userId: string): Promise<ShoppingListRow> {
   const supabase = getSupabase();
   const { data, error } = await supabase
     .from('shopping_lists')
@@ -123,13 +123,16 @@ async function getOrCreateDefaultShoppingList(userId: string): Promise<ShoppingL
   return createdList;
 }
 
-async function fetchRemoteShoppingItems(userId: string) {
-  const { data, error } = await getSupabase()
+async function fetchRemoteShoppingItems(userId: string, listId?: string) {
+  let query = getSupabase()
     .from('shopping_items')
     .select('*')
-    .eq('user_id', userId)
     .order('is_checked', { ascending: true })
     .order('name', { ascending: true });
+
+  query = listId ? query.eq('list_id', listId) : query.eq('user_id', userId);
+
+  const { data, error } = await query;
 
   if (error) {
     throwIfDatabaseNotReady(error);
@@ -139,12 +142,12 @@ async function fetchRemoteShoppingItems(userId: string) {
   return (data ?? []).map(mapShoppingItem);
 }
 
-async function refreshRemoteShoppingItems(userId: string) {
-  const items = await fetchRemoteShoppingItems(userId);
+async function refreshRemoteShoppingItems(userId: string, listId?: string) {
+  const items = await fetchRemoteShoppingItems(userId, listId);
   return replaceShoppingCache(items);
 }
 
-export async function loadShoppingItems(): Promise<ShoppingItem[]> {
+export async function loadShoppingItems(listId?: string): Promise<ShoppingItem[]> {
   const user = await getAuthenticatedUser();
 
   if (!user) {
@@ -152,7 +155,7 @@ export async function loadShoppingItems(): Promise<ShoppingItem[]> {
   }
 
   try {
-    return await refreshRemoteShoppingItems(user.id);
+    return await refreshRemoteShoppingItems(user.id, listId);
   } catch (error) {
     throwIfDatabaseNotReady(error);
     if (!isNetworkUnavailableError(error)) {
@@ -162,8 +165,8 @@ export async function loadShoppingItems(): Promise<ShoppingItem[]> {
   }
 }
 
-export async function listShoppingItems(): Promise<ShoppingItem[]> {
-  return loadShoppingItems();
+export async function listShoppingItems(listId?: string): Promise<ShoppingItem[]> {
+  return loadShoppingItems(listId);
 }
 
 export async function addShoppingItem(draft: ShoppingDraft) {
@@ -181,7 +184,7 @@ export async function addShoppingItem(draft: ShoppingDraft) {
 
   const requestedListId = draft.listId && isUuid(draft.listId) ? draft.listId : null;
   const listId = requestedListId ?? (await getOrCreateDefaultShoppingList(user.id)).id;
-  const items = await refreshRemoteShoppingItems(user.id);
+  const items = await refreshRemoteShoppingItems(user.id, listId);
   const existingItem = items.find(
     (item) => normalizeIngredientName(item.name) === normalizedName && (item.listId ?? listId) === listId,
   );
@@ -205,7 +208,7 @@ export async function addShoppingItem(draft: ShoppingDraft) {
     throw new Error('Shopping item could not be saved');
   }
 
-  await refreshRemoteShoppingItems(user.id);
+  await refreshRemoteShoppingItems(user.id, listId);
   return mapShoppingItem(data);
 }
 
@@ -229,7 +232,7 @@ export async function updateShoppingItem(id: string, draft: ShoppingDraft) {
     throw error;
   }
 
-  await refreshRemoteShoppingItems(user.id);
+  await refreshRemoteShoppingItems(user.id, draft.listId);
   return data ? mapShoppingItem(data) : null;
 }
 
@@ -241,7 +244,7 @@ export async function addRecipeIngredientsToShopping(recipeId: string, ingredien
   }
 
   const listId = (await getOrCreateDefaultShoppingList(user.id)).id;
-  const items = await refreshRemoteShoppingItems(user.id);
+  const items = await refreshRemoteShoppingItems(user.id, listId);
   const existingNames = new Set(
     items.filter((item) => (item.listId ?? listId) === listId).map((item) => normalizeIngredientName(item.name)),
   );
@@ -270,11 +273,11 @@ export async function addRecipeIngredientsToShopping(recipeId: string, ingredien
     throw error;
   }
 
-  await refreshRemoteShoppingItems(user.id);
+  await refreshRemoteShoppingItems(user.id, listId);
   return newRows.length;
 }
 
-export async function toggleShoppingItem(id: string) {
+export async function toggleShoppingItem(id: string, listId?: string) {
   const user = await getAuthenticatedUser();
 
   if (!user) {
@@ -282,7 +285,7 @@ export async function toggleShoppingItem(id: string) {
     return;
   }
 
-  const items = await refreshRemoteShoppingItems(user.id);
+  const items = await refreshRemoteShoppingItems(user.id, listId);
   const item = items.find((shoppingItem) => shoppingItem.id === id);
 
   if (!item) {
@@ -300,10 +303,10 @@ export async function toggleShoppingItem(id: string) {
     throw error;
   }
 
-  await refreshRemoteShoppingItems(user.id);
+  await refreshRemoteShoppingItems(user.id, listId);
 }
 
-export async function removeShoppingItem(id: string) {
+export async function removeShoppingItem(id: string, listId?: string) {
   const user = await getAuthenticatedUser();
 
   if (!user) {
@@ -318,10 +321,10 @@ export async function removeShoppingItem(id: string) {
     throw error;
   }
 
-  await refreshRemoteShoppingItems(user.id);
+  await refreshRemoteShoppingItems(user.id, listId);
 }
 
-export async function clearCompletedShoppingItems() {
+export async function clearCompletedShoppingItems(listId?: string) {
   const user = await getAuthenticatedUser();
 
   if (!user) {
@@ -329,16 +332,20 @@ export async function clearCompletedShoppingItems() {
     return;
   }
 
-  const { error } = await getSupabase()
+  let query = getSupabase()
     .from('shopping_items')
     .delete()
     .eq('user_id', user.id)
     .eq('is_checked', true);
+
+  query = listId ? query.eq('list_id', listId) : query;
+
+  const { error } = await query;
 
   if (error) {
     throwIfDatabaseNotReady(error);
     throw error;
   }
 
-  await refreshRemoteShoppingItems(user.id);
+  await refreshRemoteShoppingItems(user.id, listId);
 }

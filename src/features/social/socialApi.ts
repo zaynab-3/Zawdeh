@@ -10,6 +10,7 @@ import type {
   RealtimeChangePayload,
   RecipeCollectionInput,
   RecipeShareTarget,
+  ShareProfile,
   ShoppingListShareTarget,
   SocialNotification,
   UserProfile,
@@ -116,6 +117,10 @@ async function getProfilesByUserIds(userIds: string[]) {
   }
 
   return new Map((data ?? []).map((row) => [row.user_id, mapProfile(row)]));
+}
+
+export async function getUserProfilesByIds(userIds: string[]) {
+  return getProfilesByUserIds([...new Set(userIds)]);
 }
 
 export async function getOwnProfile(): Promise<UserProfile | null> {
@@ -409,6 +414,26 @@ export async function listRecipeShares(recipeId: string): Promise<RecipeShareRow
   return data ?? [];
 }
 
+export async function listRecipeShareProfiles(recipeId: string): Promise<ShareProfile[]> {
+  const shares = await listRecipeShares(recipeId);
+  const profilesById = await getProfilesByUserIds(shares.map((share) => share.shared_with_user_id));
+
+  return shares
+    .map((share) => {
+      const profile = profilesById.get(share.shared_with_user_id);
+
+      return profile
+        ? {
+            createdAt: share.created_at,
+            permission: share.permission,
+            profile,
+            userId: share.shared_with_user_id,
+          }
+        : null;
+    })
+    .filter((share): share is ShareProfile => Boolean(share));
+}
+
 export async function createShoppingList(name = 'My shopping list', visibility: Visibility = 'private') {
   const user = await requireAuthenticatedUser();
   const trimmedName = name.trim() || 'My shopping list';
@@ -423,7 +448,7 @@ export async function createShoppingList(name = 'My shopping list', visibility: 
   }
 
   if (!data) {
-    throw new Error('Shopping list share could not be saved.');
+    throw new Error('Shopping list could not be created.');
   }
 
   return data;
@@ -439,6 +464,23 @@ export async function listShoppingLists(options: PagedQuery & { visibility?: Vis
   }
 
   const { data, error } = await query;
+
+  if (error) {
+    throwDatabaseError(error);
+  }
+
+  return data ?? [];
+}
+
+export async function listOwnedShoppingLists(options: PagedQuery = {}) {
+  const user = await requireAuthenticatedUser();
+  const { from, to } = getRange(options);
+  const { data, error } = await getSupabase()
+    .from('shopping_lists')
+    .select('*')
+    .eq('user_id', user.id)
+    .order('updated_at', { ascending: false })
+    .range(from, to);
 
   if (error) {
     throwDatabaseError(error);
@@ -496,7 +538,7 @@ export async function shareShoppingListWithUser(target: ShoppingListShareTarget)
   }
 
   if (!data) {
-    throw new Error('Collection could not be created.');
+    throw new Error('Shopping list share could not be saved.');
   }
 
   return data;
@@ -530,6 +572,26 @@ export async function listShoppingListShares(listId: string): Promise<ShoppingLi
   }
 
   return data ?? [];
+}
+
+export async function listShoppingListShareProfiles(listId: string): Promise<ShareProfile[]> {
+  const shares = await listShoppingListShares(listId);
+  const profilesById = await getProfilesByUserIds(shares.map((share) => share.shared_with_user_id));
+
+  return shares
+    .map((share) => {
+      const profile = profilesById.get(share.shared_with_user_id);
+
+      return profile
+        ? {
+            createdAt: share.created_at,
+            permission: share.permission,
+            profile,
+            userId: share.shared_with_user_id,
+          }
+        : null;
+    })
+    .filter((share): share is ShareProfile => Boolean(share));
 }
 
 export async function createRecipeCollection(input: RecipeCollectionInput): Promise<RecipeCollectionRow> {
@@ -572,6 +634,23 @@ export async function listRecipeCollections(
   }
 
   const { data, error } = await query;
+
+  if (error) {
+    throwDatabaseError(error);
+  }
+
+  return data ?? [];
+}
+
+export async function listOwnedRecipeCollections(options: PagedQuery = {}): Promise<RecipeCollectionRow[]> {
+  const user = await requireAuthenticatedUser();
+  const { from, to } = getRange(options);
+  const { data, error } = await getSupabase()
+    .from('recipe_collections')
+    .select('*')
+    .eq('user_id', user.id)
+    .order('updated_at', { ascending: false })
+    .range(from, to);
 
   if (error) {
     throwDatabaseError(error);
@@ -774,6 +853,26 @@ export async function listCollectionShares(collectionId: string): Promise<Collec
   return data ?? [];
 }
 
+export async function listCollectionShareProfiles(collectionId: string): Promise<ShareProfile[]> {
+  const shares = await listCollectionShares(collectionId);
+  const profilesById = await getProfilesByUserIds(shares.map((share) => share.shared_with_user_id));
+
+  return shares
+    .map((share) => {
+      const profile = profilesById.get(share.shared_with_user_id);
+
+      return profile
+        ? {
+            createdAt: share.created_at,
+            permission: share.permission,
+            profile,
+            userId: share.shared_with_user_id,
+          }
+        : null;
+    })
+    .filter((share): share is ShareProfile => Boolean(share));
+}
+
 export async function listNotifications(options: PagedQuery & { unreadOnly?: boolean } = {}) {
   const user = await requireAuthenticatedUser();
   const { from, to } = getRange(options);
@@ -845,8 +944,10 @@ function subscribeToScopedTable(
   onChange: (payload: RealtimeChangePayload) => void,
 ) {
   const supabase = getSupabase();
+  const uniqueChannelName = `${channelName}:${Date.now()}:${Math.random().toString(36).slice(2)}`;
+
   const channel = supabase
-    .channel(channelName)
+    .channel(uniqueChannelName)
     .on('postgres_changes', { event: '*', filter, schema: 'public', table }, (payload) => {
       onChange(payload as RealtimeChangePayload);
     })

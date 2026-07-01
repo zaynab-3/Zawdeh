@@ -19,6 +19,13 @@ export type FollowProfile = {
   profile: UserProfile;
 };
 
+export type ShareProfile = {
+  createdAt: string;
+  permission: SharePermission;
+  profile: UserProfile;
+  userId: string;
+};
+
 export type PagedQuery = {
   limit?: number;
   offset?: number;

@@ -7,6 +7,8 @@ import {
   getUnreadNotificationCount,
   isFollowingUser,
   listNotifications,
+  markAllNotificationsRead,
+  markNotificationRead,
   searchUserProfiles,
   subscribeToUserNotifications,
   unfollowUser,
@@ -45,6 +47,29 @@ export function useNotifications() {
     }
   }, [user]);
 
+  const markRead = React.useCallback(
+    async (notificationId: string) => {
+      try {
+        setError(null);
+        await markNotificationRead(notificationId);
+        await refresh();
+      } catch (readError) {
+        setError(getSafeDataErrorMessage(readError, 'Notification could not be marked read.'));
+      }
+    },
+    [refresh],
+  );
+
+  const markAllRead = React.useCallback(async () => {
+    try {
+      setError(null);
+      await markAllNotificationsRead();
+      await refresh();
+    } catch (readError) {
+      setError(getSafeDataErrorMessage(readError, 'Notifications could not be marked read.'));
+    }
+  }, [refresh]);
+
   React.useEffect(() => {
     const timeout = setTimeout(() => {
       void refresh();
@@ -66,6 +91,8 @@ export function useNotifications() {
   return {
     error,
     isLoading,
+    markAllRead,
+    markRead,
     notifications,
     refresh,
     unreadCount,
