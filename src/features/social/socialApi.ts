@@ -74,7 +74,24 @@ async function requireAuthenticatedUser() {
 
 function throwDatabaseError(error: unknown) {
   throwIfDatabaseNotReady(error);
-  throw error;
+
+  console.warn('Social database error', error);
+
+  if (error && typeof error === 'object') {
+    const dbError = error as { code?: unknown; details?: unknown; hint?: unknown; message?: unknown };
+    const parts = [
+      typeof dbError.message === 'string' ? dbError.message : '',
+      typeof dbError.details === 'string' ? dbError.details : '',
+      typeof dbError.hint === 'string' ? dbError.hint : '',
+      typeof dbError.code === 'string' ? `Code: ${dbError.code}` : '',
+    ].filter(Boolean);
+
+    if (parts.length > 0) {
+      throw new Error(parts.join(' | '));
+    }
+  }
+
+  throw new Error('Database request failed.');
 }
 
 function mapProfile(row: ProfileRow): UserProfile {

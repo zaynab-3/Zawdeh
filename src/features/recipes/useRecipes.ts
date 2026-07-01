@@ -1,5 +1,6 @@
 import * as React from 'react';
 
+import { useAuth } from '@/features/auth/useAuth';
 import { useI18n } from '@/features/preferences/i18n';
 import {
   deleteRecipe,
@@ -45,8 +46,10 @@ function getRecipeListSignature(recipes: RecipeDetail[]) {
 }
 
 export function useRecipes(options: UseRecipesOptions = {}) {
+  const { user } = useAuth();
   const { language } = useI18n();
   const scope = options.scope ?? 'all';
+  const userId = user?.id ?? null;
   const shouldTranslate = options.translate ?? true;
   const [error, setError] = React.useState<string | null>(null);
   const [isLoading, setIsLoading] = React.useState(true);
@@ -57,38 +60,55 @@ export function useRecipes(options: UseRecipesOptions = {}) {
 
   React.useEffect(() => {
     let isMounted = true;
+    let unsubscribe: (() => void) | undefined;
 
-    listRecipeDetails(scope)
-      .then((nextRecipes) => {
+    async function loadScopedRecipes() {
+      await Promise.resolve();
+
+      if (!isMounted) {
+        return;
+      }
+
+      setIsLoading(true);
+      setError(null);
+      setRecipes([]);
+      setDisplayRecipes([]);
+
+      try {
+        const nextRecipes = await listRecipeDetails(scope);
+
         if (isMounted) {
           setRecipes(nextRecipes);
           setDisplayRecipes(nextRecipes);
           setError(null);
         }
-      })
-      .catch((loadError: unknown) => {
+      } catch (loadError: unknown) {
         if (isMounted) {
           setError(getSafeDataErrorMessage(loadError, 'Saved recipes could not be loaded.'));
         }
-      })
-      .finally(() => {
+      } finally {
         if (isMounted) {
           setIsLoading(false);
         }
-      });
-
-    const unsubscribe = subscribeRecipes((nextRecipes) => {
-      if (isMounted) {
-        setRecipes(nextRecipes);
-        setDisplayRecipes(nextRecipes);
       }
-    });
+    }
+
+    void loadScopedRecipes();
+
+    if (!userId) {
+      unsubscribe = subscribeRecipes((nextRecipes) => {
+        if (isMounted) {
+          setRecipes(nextRecipes);
+          setDisplayRecipes(nextRecipes);
+        }
+      });
+    }
 
     return () => {
       isMounted = false;
-      unsubscribe();
+      unsubscribe?.();
     };
-  }, [scope]);
+  }, [scope, userId]);
 
   const recipeListSignature = React.useMemo(() => getRecipeListSignature(recipes), [recipes]);
 
